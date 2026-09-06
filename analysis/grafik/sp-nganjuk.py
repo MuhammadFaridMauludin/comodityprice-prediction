@@ -6,19 +6,25 @@ import matplotlib.pyplot as plt
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 
-FILE_HARGA = PROJECT_ROOT / "data" / "price" / "harga-cabai.csv"
-FILE_CUACA = PROJECT_ROOT / "data" / "weather" / "cuaca_kediri.csv"
+#konfigurasi
+FILE_HARGA = PROJECT_ROOT / "data" / "price" / "harga-bawangmerah.csv"
+FILE_CUACA = PROJECT_ROOT / "data" / "weather" / "cuaca-nganjuk.csv"
 OUTPUT_FOLDER = PROJECT_ROOT / "analysis" / "hasil"
 
-WILAYAH_SEKITAR_KEDIRI = [
+WILAYAH_SEKITAR_NGANJUK = [
+    "Kabupaten Nganjuk",
+    "Kabupaten Bojonegoro",
+    "Kabupaten Jombang",
     "Kabupaten Kediri", "Kota Kediri",
-    "Kabupaten Trenggalek", "Kabupaten Tulungagung",
-    "Kabupaten Blitar", "Kota Blitar",
+    "Kabupaten Madiun", "Kota Madiun",
+    "Kabupaten Ngawi",
+    "Kabupaten Magetan",
+    "Kabupaten Lamongan",
+    "Kabupaten Mojokerto", "Kota Mojokerto",
     "Kabupaten Malang", "Kota Malang",
     "Kabupaten Pasuruan", "Kota Pasuruan",
     "Kota Surabaya", "Kabupaten Sidoarjo",
-    "Kabupaten Gresik", "Kabupaten Mojokerto", "Kota Mojokerto",
-    "Kabupaten Jombang", "Kabupaten Nganjuk", "Kabupaten Lamongan",
+    "Kabupaten Gresik",
 ]
 
 MAX_LAG = 90
@@ -31,7 +37,7 @@ plt.rcParams.update({
 })
 
 #prepocessing data cuaca
-print("[1/5] Memproses data cuaca harian Kediri...")
+print("[1/5] Memproses data cuaca harian Nganjuk...")
 daily_weather = pd.read_csv(FILE_CUACA)
 daily_weather['tanggal'] = pd.to_datetime(daily_weather['tanggal'])
 
@@ -40,8 +46,8 @@ print("[2/5] Memproses data harga cabai...")
 df_price_raw = pd.read_csv(FILE_HARGA)
 df_price_raw['tanggal'] = pd.to_datetime(df_price_raw['tanggal'])
 
-wilayah_tersedia = [w for w in WILAYAH_SEKITAR_KEDIRI if w in df_price_raw.columns]
-wilayah_hilang = [w for w in WILAYAH_SEKITAR_KEDIRI if w not in df_price_raw.columns]
+wilayah_tersedia = [w for w in WILAYAH_SEKITAR_NGANJUK if w in df_price_raw.columns]
+wilayah_hilang = [w for w in WILAYAH_SEKITAR_NGANJUK if w not in df_price_raw.columns]
 if wilayah_hilang:
     print("Peringatan, kolom tidak ditemukan di CSV harga:", wilayah_hilang)
 print(f"-> Wilayah dianalisis ({len(wilayah_tersedia)}): {wilayah_tersedia}")
@@ -50,7 +56,7 @@ df_price = df_price_raw[['tanggal'] + wilayah_tersedia].copy()
 for w in wilayah_tersedia:
     df_price[w] = pd.to_numeric(df_price[w], errors='coerce')
 
-#dataset digabung
+#datasaet digabung
 df_merged = pd.merge(daily_weather, df_price, on='tanggal', how='inner')
 df_merged = df_merged.sort_values('tanggal').reset_index(drop=True)
 print(f"[3/5] Total data harian tersinkron: {len(df_merged)} hari.")
@@ -113,8 +119,8 @@ print(f"\n>> Kandidat kuat sentra produksi (korelasi cuaca-harga terbesar): {kan
 print(">> CATATAN: ini indikasi statistik, perlu dikonfirmasi dengan data/literatur")
 print("   produksi pertanian aktual (mis. BPS/Dinas Pertanian) sebelum disimpulkan final.")
 
-df_ringkasan.to_csv(OUTPUT_FOLDER / "ringkasan_korelasikediri.csv", index=False)
-print("\nRingkasan disimpan ke: analysis/hasil/ringkasan_korelasikediri.csv")
+df_ringkasan.to_csv(OUTPUT_FOLDER / "ringkasan_korelasinganjuk.csv", index=False)
+print("\nRingkasan disimpan ke: analysis/hasil/ringkasan_korelasinganjuk.csv")
 
 #visualisasi
 print("\n[5/5] Menampilkan visualisasi grafik korelasi seluruh wilayah...")
@@ -150,7 +156,7 @@ for j in range(n_wilayah, len(axes)):
     fig.delaxes(axes[j])
 
 plt.tight_layout()
-plt.savefig(OUTPUT_FOLDER / "grafik_korelasikediri.png", dpi=300, bbox_inches='tight')
+plt.savefig(OUTPUT_FOLDER / "grafik_korelasinganjuk.png", dpi=300, bbox_inches='tight')
 plt.show()
 
-print("\nGrafik disimpan ke: analysis/hasil/grafik_korelasikediri.png")
+print("\nGrafik disimpan ke: analysis/hasil/grafik_korelasinganjuk.png")
