@@ -7,16 +7,16 @@ import requests
 from bs4 import BeautifulSoup
 
 URL = "https://siskaperbapo.jatimprov.go.id/harga-komoditas"
-NAMA_KOMODITAS = "Cabe Rawit Merah"
+NAMA_KOMODITAS = "Bawang Merah"
 
-TANGGAL_AKHIR = datetime.strptime("2026-09-20", "%Y-%m-%d")
-TANGGAL_MULAI = datetime.strptime("2022-09-20", "%Y-%m-%d")
+TANGGAL_AKHIR = datetime.strptime("2026-09-03", "%Y-%m-%d")
+TANGGAL_MULAI = datetime.strptime("2024-01-01", "%Y-%m-%d")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 
 output_folder = PROJECT_ROOT / "data" / "price"
-output_path = output_folder / "harga-cabai.csv"
+output_path = output_folder / "harga-bawangmerah.csv"
 
 session = requests.Session()
 session.headers.update({

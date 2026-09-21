@@ -6,10 +6,10 @@ import requests
 import pandas as pd
 from pathlib import Path
 
-LATITUDE = -7.82
-LONGITUDE = 112.0
-START_DATE = "2022-09-20"
-END_DATE = "2026-09-20"
+LATITUDE = -7.60
+LONGITUDE = 111.92
+START_DATE = "2024-01-01"
+END_DATE = "2026-09-03"
 
 BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
@@ -17,7 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
 output_folder = PROJECT_ROOT / "data" / "weather"
-output_path = output_folder / "sp-kediri.csv"
+output_path = output_folder / "sp-nganjuk.csv"
 
 def data_cuaca_harian():
     print("Sedang memuat data suhu & curah hujan harian dari Open-Meteo...")
@@ -86,7 +86,7 @@ def data_kelembapan():
 
 #cek folder
 output_folder = "../../data/weather"
-output_path = os.path.join(output_folder, "cuaca_kediri.csv")
+output_path = os.path.join(output_folder, "cuaca-nganjuk.csv")
 
 print(f"Memeriksa folder output '{output_folder}'...")
 os.makedirs(output_folder, exist_ok=True)

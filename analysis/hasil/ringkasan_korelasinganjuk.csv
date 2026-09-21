@@ -1,0 +1,20 @@
+wilayah,variabel_terkuat,lag_hari_terkuat,korelasi_terkuat
+Kota Surabaya,suhu,90,-0.514
+Kota Madiun,suhu,90,-0.51
+Kabupaten Jombang,suhu,90,-0.499
+Kabupaten Kediri,suhu,90,-0.484
+Kota Kediri,suhu,89,-0.465
+Kabupaten Bojonegoro,suhu,90,-0.457
+Kabupaten Sidoarjo,suhu,90,-0.455
+Kabupaten Lamongan,suhu,90,-0.455
+Kota Mojokerto,suhu,90,-0.449
+Kabupaten Madiun,suhu,90,-0.445
+Kabupaten Nganjuk,suhu,90,-0.444
+Kabupaten Malang,kelembapan,36,0.439
+Kabupaten Gresik,suhu,90,-0.436
+Kabupaten Magetan,kelembapan,42,0.428
+Kabupaten Ngawi,suhu,90,-0.423
+Kabupaten Pasuruan,suhu,90,-0.422
+Kabupaten Mojokerto,suhu,88,-0.412
+Kota Malang,kelembapan,80,0.397
+Kota Pasuruan,kelembapan,79,0.355
