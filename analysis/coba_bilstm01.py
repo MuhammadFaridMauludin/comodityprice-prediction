@@ -3,35 +3,27 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout
+from keras.layers import Bidirectional, LSTM, Dense, Dropout
 from keras.optimizers import Adam
 from hijridate import Gregorian
 
-# Tentukan Wilayah Target
 TARGET_WILAYAH = 'Kota Surabaya'
+
 # 1. LOAD & MERGE DATASET
 df_harga = pd.read_csv('../data/price/harga-cabai.csv')
 df_cuaca = pd.read_csv('../data/weather/cuaca_kediri.csv')
 
-# Filter kolom tanggal & wilayah target
-if TARGET_WILAYAH in df_harga.columns:
-    df_harga = df_harga[['tanggal', TARGET_WILAYAH]].rename(columns={TARGET_WILAYAH: 'harga'})
-else:
-    raise KeyError(f"Kolom '{TARGET_WILAYAH}' tidak ditemukan di CSV harga!")
-
-# Format kolom tanggal
+df_harga = df_harga[['tanggal', TARGET_WILAYAH]].rename(columns={TARGET_WILAYAH: 'harga'})
 df_harga['tanggal'] = pd.to_datetime(df_harga['tanggal'])
 df_cuaca['tanggal'] = pd.to_datetime(df_cuaca['tanggal'])
 
-# Penggabungan data berdasarkan tanggal
 df = pd.merge(df_harga, df_cuaca, on='tanggal', how='outer').sort_values('tanggal').reset_index(drop=True)
 df = df.ffill()
 
 # 2. FEATURE ENGINEERING
-# Lag Suhu 23 Hari
-df['suhu_lag23'] = df['suhu'].shift(23)
+# Lag Kelembapan 30 Hari (disesuaikan dengan hasil korelasi r = 0.287)
+df['kelembapan_lag30'] = df['kelembapan'].shift(30)
 
-# Pembuatan Variabel Ramadan & Pre-Eid (H-7 Idul Fitri)
 def generate_ramadan_features(date_val):
     hijri_date = Gregorian(date_val.year, date_val.month, date_val.day).to_hijri()
     is_ramadan = 1 if hijri_date.month == 9 else 0
@@ -42,10 +34,10 @@ ramadan_data = df['tanggal'].apply(generate_ramadan_features)
 df['is_ramadan'] = [x[0] for x in ramadan_data]
 df['is_pre_eid'] = [x[1] for x in ramadan_data]
 
-# Menghapus baris NaN akibat shift(23)
+# Menghapus baris NaN akibat shift(30)
 df = df.dropna().reset_index(drop=True)
 
-# 3. FUNGSI PERSIAPAN DATA TIME-SERIES
+# 3. HELPER SEQUENCE
 def create_sequences(data, target_col_idx, window_size=7):
     X, y = [], []
     for i in range(len(data) - window_size):
@@ -53,37 +45,31 @@ def create_sequences(data, target_col_idx, window_size=7):
         y.append(data[i + window_size, target_col_idx])
     return np.array(X), np.array(y)
 
-# 4. FUNGSI TRAIN & EVALUATE
-def train_and_evaluate(feature_cols, scenario_name):
+# 4. TRAIN & EVALUATE BiLSTM
+def train_bilstm(feature_cols, scenario_name):
     print(f"\n==========================================")
-    print(f" JALANKAN: {scenario_name}")
-    print(f" Fitur: {feature_cols}")
+    print(f" [BiLSTM] JALANKAN: {scenario_name}")
     print(f"==========================================")
 
     dataset = df[feature_cols].values
-
-    # Split Data Kronologis Sebelum Scaling (80% Train, 20% Test)
     train_size = int(len(dataset) * 0.8)
-    train_raw = dataset[:train_size]
-    test_raw = dataset[train_size:]
+    train_raw, test_raw = dataset[:train_size], dataset[train_size:]
 
-    # Normalisasi (Fit hanya pada Data Latih)
     scaler = MinMaxScaler(feature_range=(0, 1))
     train_scaled = scaler.fit_transform(train_raw)
     test_scaled = scaler.transform(test_raw)
 
-    # Buat Sequence (Window Size = 7 Hari)
     WINDOW_SIZE = 7
     target_idx = feature_cols.index('harga')
 
     X_train, y_train = create_sequences(train_scaled, target_idx, WINDOW_SIZE)
     X_test, y_test = create_sequences(test_scaled, target_idx, WINDOW_SIZE)
 
-    # Arsitektur Model LSTM
+    # ARSITEKTUR BiLSTM (Bidirectional Wrapper)
     model = Sequential([
-        LSTM(64, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])),
+        Bidirectional(LSTM(64, return_sequences=True), input_shape=(X_train.shape[1], X_train.shape[2])),
         Dropout(0.2),
-        LSTM(32, return_sequences=False),
+        Bidirectional(LSTM(32, return_sequences=False)),
         Dropout(0.2),
         Dense(1)
     ])
@@ -91,10 +77,9 @@ def train_and_evaluate(feature_cols, scenario_name):
     model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
     model.fit(X_train, y_train, epochs=50, batch_size=16, verbose=0)
 
-    # Prediksi
     predictions = model.predict(X_test)
 
-    # Denormalisasi Hasil Prediksi & Target Asli
+    # Denormalisasi
     dummy_pred = np.zeros((len(predictions), len(feature_cols)))
     dummy_pred[:, target_idx] = predictions.flatten()
     actual_pred = scaler.inverse_transform(dummy_pred)[:, target_idx]
@@ -103,41 +88,26 @@ def train_and_evaluate(feature_cols, scenario_name):
     dummy_actual[:, target_idx] = y_test
     actual_y = scaler.inverse_transform(dummy_actual)[:, target_idx]
 
-    # Hitung Metrik Evaluasi
+    # Metrik Evaluasi
     rmse = np.sqrt(mean_squared_error(actual_y, actual_pred))
     mae = mean_absolute_error(actual_y, actual_pred)
     mape = mean_absolute_percentage_error(actual_y, actual_pred) * 100
 
-    print(f" Hasil -> RMSE: Rp {rmse:,.2f} | MAE: Rp {mae:,.2f} | MAPE: {mape:.2f}%")
+    print(f" BiLSTM Hasil -> RMSE: Rp {rmse:,.2f} | MAE: Rp {mae:,.2f} | MAPE: {mape:.2f}%")
 
-    return {
-        'Skenario': scenario_name,
-        'RMSE': rmse,
-        'MAE': mae,
-        'MAPE (%)': mape
-    }
-# 5. DEFINE & EKSEKUSI 4 SKENARIO
-features_skenario_1 = ['harga']
-features_skenario_2 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'suhu_lag23']
-features_skenario_3 = ['harga', 'is_ramadan', 'is_pre_eid']
-features_skenario_4 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'suhu_lag23', 'is_ramadan', 'is_pre_eid']
+    return {'Model': 'BiLSTM', 'Skenario': scenario_name, 'RMSE': rmse, 'MAE': mae, 'MAPE (%)': mape}
 
+# 5. EKSEKUSI 4 SKENARIO BiLSTM
 scenarios = [
-    (features_skenario_1, "Skenario 1: Hanya Harga"),
-    (features_skenario_2, "Skenario 2: Harga + Cuaca"),
-    (features_skenario_3, "Skenario 3: Harga + Ramadan"),
-    (features_skenario_4, "Skenario 4: Harga + Cuaca + Ramadan")
+    (['harga'], "Skenario 1: Hanya Harga"),
+    (['harga', 'suhu', 'kelembapan', 'curah_hujan', 'kelembapan_lag30'], "Skenario 2: Harga + Cuaca"),
+    (['harga', 'is_ramadan', 'is_pre_eid'], "Skenario 3: Harga + Ramadan"),
+    (['harga', 'suhu', 'kelembapan', 'curah_hujan', 'kelembapan_lag30', 'is_ramadan', 'is_pre_eid'], "Skenario 4: Harga + Cuaca + Ramadan")
 ]
 
-results = []
-
+results_bilstm = []
 for cols, name in scenarios:
-    res = train_and_evaluate(cols, name)
-    results.append(res)
+    results_bilstm.append(train_bilstm(cols, name))
 
-# 6. REKAPITULASI HASIL EKSPERIMEN
-df_results = pd.DataFrame(results)
-print("\n" + "="*60)
-print(" REKAPITULASI PERBANDINGAN PERFORMA MODEL")
-print("="*60)
-print(df_results.to_string(index=False))
+print("\nREKAPITULASI HASIL MODEL BiLSTM:")
+print(pd.DataFrame(results_bilstm).to_string(index=False))

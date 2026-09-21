@@ -8,8 +8,8 @@ from pathlib import Path
 
 LATITUDE = -8.13
 LONGITUDE = 112.56
-START_DATE = "2024-01-01"
-END_DATE = "2026-09-03"
+START_DATE = "2022-09-20"
+END_DATE = "2026-09-20"
 
 BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 

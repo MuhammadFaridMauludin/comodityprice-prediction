@@ -9,6 +9,7 @@ from hijridate import Gregorian
 
 # Tentukan Wilayah Target
 TARGET_WILAYAH = 'Kota Surabaya'
+
 # 1. LOAD & MERGE DATASET
 df_harga = pd.read_csv('../data/price/harga-cabai.csv')
 df_cuaca = pd.read_csv('../data/weather/cuaca_kediri.csv')
@@ -28,8 +29,8 @@ df = pd.merge(df_harga, df_cuaca, on='tanggal', how='outer').sort_values('tangga
 df = df.ffill()
 
 # 2. FEATURE ENGINEERING
-# Lag Suhu 23 Hari
-df['suhu_lag23'] = df['suhu'].shift(23)
+# Lag Kelembapan 30 Hari (disesuaikan dengan hasil korelasi r = 0.287)
+df['kelembapan_lag30'] = df['kelembapan'].shift(30)
 
 # Pembuatan Variabel Ramadan & Pre-Eid (H-7 Idul Fitri)
 def generate_ramadan_features(date_val):
@@ -42,7 +43,7 @@ ramadan_data = df['tanggal'].apply(generate_ramadan_features)
 df['is_ramadan'] = [x[0] for x in ramadan_data]
 df['is_pre_eid'] = [x[1] for x in ramadan_data]
 
-# Menghapus baris NaN akibat shift(23)
+# Menghapus baris NaN akibat shift(30)
 df = df.dropna().reset_index(drop=True)
 
 # 3. FUNGSI PERSIAPAN DATA TIME-SERIES
@@ -116,11 +117,12 @@ def train_and_evaluate(feature_cols, scenario_name):
         'MAE': mae,
         'MAPE (%)': mape
     }
+
 # 5. DEFINE & EKSEKUSI 4 SKENARIO
 features_skenario_1 = ['harga']
-features_skenario_2 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'suhu_lag23']
+features_skenario_2 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'kelembapan_lag30']
 features_skenario_3 = ['harga', 'is_ramadan', 'is_pre_eid']
-features_skenario_4 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'suhu_lag23', 'is_ramadan', 'is_pre_eid']
+features_skenario_4 = ['harga', 'suhu', 'kelembapan', 'curah_hujan', 'kelembapan_lag30', 'is_ramadan', 'is_pre_eid']
 
 scenarios = [
     (features_skenario_1, "Skenario 1: Hanya Harga"),
