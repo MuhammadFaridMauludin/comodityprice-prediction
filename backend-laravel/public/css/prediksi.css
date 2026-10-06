@@ -1,0 +1,64 @@
+/* Gaya khusus halaman Prediksi. Dimuat lewat @push('styles') di prediksi.blade.php */
+
+.page-header__meta { color: var(--muted); font-size: 14px; }
+.lead { color: var(--muted); font-size: 15px; margin: 0 4px 16px; }
+
+/* ===== Tab komoditas ===== */
+.tabs {
+    display: flex; gap: 10px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -4px 8px; padding: 4px 4px 12px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+    flex: none; white-space: nowrap;
+    padding: 10px 20px; border-radius: 999px;
+    background: rgba(255, 255, 255, .8);
+    color: var(--muted); font-size: 15px; font-weight: 500;
+    transition: background .15s, color .15s;
+}
+.tab:hover { background: #fff; color: var(--ink); }
+.tab.is-active {
+    background: var(--blue); color: #fff; font-weight: 600;
+    box-shadow: 0 8px 20px rgba(26, 92, 255, .3);
+}
+
+/* ===== Susunan halaman (mobile: satu kolom) ===== */
+.pred { display: grid; gap: 16px; grid-template-columns: 1fr; }
+
+/* ===== Grafik aktual vs prediksi ===== */
+.fchart__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.fchart__head h2 { font: 700 18px var(--font-head); }
+.fchart__head span { color: var(--muted); font-size: 13px; }
+.fchart__canvas { position: relative; height: 280px; }
+
+.legend { list-style: none; margin: 16px 0 0; padding: 0; display: flex; gap: 22px; color: var(--muted); font-size: 14px; }
+.legend li { display: flex; align-items: center; gap: 8px; }
+.legend__line { display: inline-block; width: 26px; height: 4px; border-radius: 2px; }
+.legend__line--actual { background: var(--blue); }
+.legend__line--forecast { background: repeating-linear-gradient(90deg, var(--cyan) 0 6px, transparent 6px 10px); }
+
+/* ===== Tabel hasil prediksi ===== */
+.ftable { padding: 0; overflow: hidden; }
+.ftable__title { font: 700 17px var(--font-head); padding: 20px 24px 16px; }
+.ftable__scroll { overflow-x: auto; }
+.ftable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ftable th {
+    background: rgba(26, 92, 255, .08);
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; text-align: left;
+    padding: 12px 24px;
+}
+.ftable td { padding: 14px 24px; border-bottom: 1px solid rgba(91, 107, 130, .12); font-size: 15px; }
+.ftable tbody tr:last-child td { border-bottom: 0; }
+.ftable .price { font-weight: 700; }
+.ftable .num { text-align: right; }
+.ftable .change { font-size: 15px; font-weight: 500; }
+
+/* ===== Desktop ===== */
+@media (min-width: 1024px) {
+    .tabs { flex-wrap: wrap; overflow: visible; margin-bottom: 12px; }
+    .pred { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+    .fchart__canvas { height: 340px; }
+}

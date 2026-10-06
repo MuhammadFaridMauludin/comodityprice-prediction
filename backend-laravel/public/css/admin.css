@@ -1,0 +1,36 @@
+/* Melembutkan komponen Tabler. Dimuat SETELAH tabler.min.css. */
+:root {
+    --tblr-border-radius: .75rem;
+    --tblr-border-radius-lg: 1rem;
+    --admin-shadow: 0 6px 24px rgba(30, 64, 120, .08);
+}
+
+/* Kartu */
+.card { --tblr-card-border-radius: 1.25rem; border-color: var(--tblr-border-color-translucent); box-shadow: var(--admin-shadow); }
+.card-header { border-bottom: 0; padding-top: 1.25rem; }
+.card-title { font-weight: 700; }
+.card-footer { background: transparent; border-top-color: var(--tblr-border-color-translucent); }
+.card-stat { transition: transform .15s ease, box-shadow .15s ease; }
+.card-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(30, 64, 120, .14); }
+
+/* Tombol berbentuk pil */
+.btn { --tblr-btn-border-radius: 999px; font-weight: 600; }
+.btn:not(.btn-icon) { --tblr-btn-padding-x: 1.1rem; }
+
+/* Form */
+.form-control, .form-select { border-radius: .75rem; }
+.form-control:focus, .form-select:focus { box-shadow: 0 0 0 .25rem rgba(var(--tblr-primary-rgb), .15); }
+
+/* Tabel */
+.card-table thead th { background: rgba(var(--tblr-primary-rgb), .06); border-bottom: 0; }
+.card-table tbody td { padding-block: .8rem; }
+.table-hover > tbody > tr:hover > * { --tblr-table-hover-bg: rgba(var(--tblr-primary-rgb), .05); }
+
+/* Badge, avatar, dropdown, sidebar */
+.badge { border-radius: 999px; padding: .35em .7em; }
+.avatar { border-radius: .85rem; }
+.dropdown-menu { border-radius: .85rem; border-color: var(--tblr-border-color-translucent); box-shadow: var(--admin-shadow); }
+.navbar-vertical .nav-link { border-radius: .75rem; margin-inline: .5rem; }
+
+/* Kartu status di dalam kartu lain */
+.stat-tile { border: 1px solid var(--tblr-border-color-translucent); border-radius: 1rem; background: var(--tblr-bg-surface-secondary); }
