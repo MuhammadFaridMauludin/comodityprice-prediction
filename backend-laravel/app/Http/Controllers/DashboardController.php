@@ -30,11 +30,11 @@ class DashboardController extends Controller
         $links = [
             ['href' => route('evaluasi'), 'icon' => 'gauge', 'title' => 'Model terbaik: GRU',
              'subtitle' => 'RMSE '.number_format(195.6, 1, ',', '.').' · MAPE '.number_format(2.33, 2, ',', '.').'%'],
-            ['href' => route('notif'), 'icon' => 'bell', 'title' => 'Notifikasi Harga',
-             'subtitle' => '2 peringatan ambang harga aktif'],
+            // ['href' => route('notif'), 'icon' => 'bell', 'title' => 'Notifikasi Harga',
+            //  'subtitle' => '2 peringatan ambang harga aktif'],
         ];
 
-        return view('dashboard.index', [
+        return view('dashboard.dashboard', [
             'prediction'  => $prediction,
             'labels'      => $labels,
             'datasets'    => [['label' => 'Harga', 'values' => $trend, 'color' => '#1a5cff']],
