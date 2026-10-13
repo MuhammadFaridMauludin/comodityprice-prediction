@@ -180,8 +180,76 @@
 @push('myscript')
     <script>
         (function() {
-                var modal = document.getElementById('modal-user');
-                var form = document.getElementById('user-form');
+            var modal = document.getElementById('modal-user');
+            var form = document.getElementById('user-form');
+            var methodInput = document.getElementById('user-method');
+            var modeInput = document.getElementById('user-mode');
+            var idInput = document.getElementById('user-id');
+            var title = document.getElementById('user-title');
+            var fName = document.getElementById('f-name');
+            var fEmail = document.getElementById('f-email');
+            var fRole = document.getElementById('f-role');
+            var fStatus = document.getElementById('f-status');
+            var fPassword = document.getElementById('f-password');
 
-                // Isi modal saat dibuka: mode tambah (kosong) atau ubah (data baris yang diklik)
-                modal.addEventListener('show.bs.modal',
+            function setSelect(select, value) {
+                if (value) {
+                    select.value = value;
+                } else {
+                    select.selectedIndex = 0;
+                }
+            }
+
+            // Isi modal saat dibuka: mode tambah (kosong) atau ubah (data baris yang diklik)
+            modal.addEventListener('show.bs.modal', function(event) {
+                var btn = event.relatedTarget;
+                if (!btn) return;
+
+                var isEdit = btn.dataset.mode === 'edit';
+
+                modeInput.value = isEdit ? 'edit' : 'create';
+                idInput.value = isEdit ? (btn.dataset.id || '') : '';
+                methodInput.value = isEdit ? 'PUT' : 'POST';
+                form.action = isEdit ?
+                    form.dataset.updateUrl.replace('__ID__', btn.dataset.id) :
+                    form.dataset.storeUrl;
+                title.textContent = isEdit ? 'Ubah Pengguna' : 'Tambah Pengguna';
+
+                fName.value = btn.dataset.name || '';
+                fEmail.value = btn.dataset.email || '';
+                setSelect(fRole, btn.dataset.role);
+                setSelect(fStatus, btn.dataset.status);
+
+                fPassword.value = '';
+                fPassword.required = !isEdit;
+                fPassword.placeholder = isEdit ? 'Kosongkan jika tidak diubah' : '';
+            });
+
+            // Konfirmasi hapus
+            document.querySelectorAll('.btn-delete').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    Swal.fire({
+                        title: 'Hapus pengguna?',
+                        text: 'Pengguna "' + btn.dataset.name + '" akan dihapus.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, hapus',
+                        cancelButtonText: 'Batal'
+                    }).then(function(r) {
+                        if (r.isConfirmed) {
+                            var f = document.getElementById('delete-form');
+                            f.action = btn.dataset.url;
+                            f.submit();
+                        }
+                    });
+                });
+            });
+
+            // Jika validasi gagal, buka kembali modal dengan isian sebelumnya
+            document.addEventListener('DOMContentLoaded', function() {
+                var reopen = document.getElementById('reopen-modal');
+                if (reopen) reopen.click();
+            });
+        })();
+    </script>
+@endpush
