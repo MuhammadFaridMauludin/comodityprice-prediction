@@ -119,16 +119,18 @@
                     <span class="avatar avatar-sm"
                         style="background-image: url('{{ asset('assets/img/nophoto.jpg') }}')"></span>
                     <div class="d-none d-xl-block ps-2">
-                        {{-- <div>{{ Auth::guard('user')->user()->name }}</div> --}}
+                        <div>{{ auth()->user()->name }}</div>
                         <div class="mt-1 small text-secondary">Administrator</div>
                     </div>
                 </a>
                 <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-                    <div class="dropdown-divider"></div>
-                    {{-- <a href="./settings.html" class="dropdown-item">Settings</a> --}}
                     <a href="#" class="dropdown-item" id="btn-logout-admin">Logout</a>
                 </div>
             </div>
+
+            <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                @csrf
+            </form>
         </div>
         <div class="collapse navbar-collapse" id="navbar-menu">
             <div>
@@ -148,7 +150,7 @@
 
 <script>
     document.getElementById('btn-logout-admin').addEventListener('click', function(e) {
-        e.preventDefault(); // Hindari redirect langsung
+        e.preventDefault();
 
         Swal.fire({
             title: "Logout dari sistem?",
@@ -161,8 +163,7 @@
             cancelButtonText: "Batal"
         }).then((result) => {
             if (result.isConfirmed) {
-                // Redirect manual ke route logout
-                window.location.href = "/proseslogoutadmin";
+                document.getElementById('logout-form').submit();
             }
         });
     });
