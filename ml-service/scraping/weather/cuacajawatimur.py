@@ -7,10 +7,7 @@ import mysql.connector
 from pathlib import Path
 from dotenv import load_dotenv
 
-
-# =========================================================
-# 1. KONFIGURASI
-# =========================================================
+#KONFIGURASI
 
 # Lokasi file:
 # project-root/
@@ -28,19 +25,15 @@ PROJECT_ROOT = os.path.abspath(
 # Membaca file .env di root proyek
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-START_DATE = "2026-09-20"
-END_DATE = "2026-10-12"
+START_DATE = "2022-01-01"
+END_DATE = "2026-10-01"
 
 API_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-
-# =========================================================
-# 2. KONEKSI DATABASE
-# =========================================================
+#KONEKSI DATABASE
 
 def koneksi_database():
     """Membuat koneksi ke MySQL menggunakan konfigurasi .env."""
-
     db_host = os.getenv("DB_HOST")
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD", "")
@@ -63,10 +56,7 @@ def koneksi_database():
     print("Koneksi database berhasil.")
     return mydb
 
-
-# =========================================================
-# 3. MENGAMBIL DATA CUACA OPEN-METEO
-# =========================================================
+#MENGAMBIL DATA CUACA OPEN-METEO
 
 def ambil_data_cuaca(latitude, longitude):
     """
@@ -98,9 +88,7 @@ def ambil_data_cuaca(latitude, longitude):
             data.get("reason", "Open-Meteo mengembalikan kesalahan.")
         )
 
-    # ---------------------------------------------
     # A. Data suhu dan curah hujan per hari
-    # ---------------------------------------------
 
     df_harian = pd.DataFrame(data["daily"])
 
@@ -117,10 +105,7 @@ def ambil_data_cuaca(latitude, longitude):
         df_harian["tanggal"]
     ).dt.date
 
-    # ---------------------------------------------
-    # B. Data kelembapan per jam
-    # ---------------------------------------------
-
+  # B. Data kelembapan per jam
     df_jam = pd.DataFrame(data["hourly"])
 
     df_jam.rename(
@@ -147,9 +132,7 @@ def ambil_data_cuaca(latitude, longitude):
         )
     )
 
-    # ---------------------------------------------
     # C. Menggabungkan data berdasarkan tanggal
-    # ---------------------------------------------
 
     df_final = df_harian.merge(
         df_kelembapan,
@@ -164,10 +147,7 @@ def ambil_data_cuaca(latitude, longitude):
 
     return df_final
 
-
-# =========================================================
-# 4. MENYIMPAN DATA KE MYSQL
-# =========================================================
+#MENYIMPAN DATA KE MYSQL
 
 def simpan_data(mycursor, id_koordinat, df):
     """
@@ -231,8 +211,6 @@ def simpan_data(mycursor, id_koordinat, df):
     return len(values)
 
 
-# =========================================================
-# 5. PROSES UTAMA
 # =========================================================
 
 def main():
