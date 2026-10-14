@@ -5,24 +5,10 @@
 
     <div class="page-body">
         <div class="container-xl">
-
-            @if (session('status'))
-                <div class="alert alert-success alert-dismissible" role="alert">
-                    {{ session('status') }}
-                    <a href="#" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></a>
-                </div>
-            @endif
-            @if (session('error'))
-                <div class="alert alert-danger alert-dismissible" role="alert">
-                    {{ session('error') }}
-                    <a href="#" class="btn-close" data-bs-dismiss="alert" aria-label="Tutup"></a>
-                </div>
-            @endif
-
             <x-admin.card title="Daftar Admin" :flush="true">
                 <x-slot name="actions">
-                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
-                        data-bs-target="#modal-user" data-mode="create">
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modal-user"
+                        data-mode="create">
                         <i class="ti ti-plus"></i> Tambah Admin
                     </button>
                 </x-slot>
@@ -155,72 +141,49 @@
 
 @push('myscript')
     <script>
-        (function() {
-            var modal = document.getElementById('modal-user');
-            var form = document.getElementById('user-form');
-            var methodInput = document.getElementById('user-method');
-            var modeInput = document.getElementById('user-mode');
-            var idInput = document.getElementById('user-id');
-            var title = document.getElementById('user-title');
-            var fName = document.getElementById('f-name');
-            var fEmail = document.getElementById('f-email');
-            var fStatus = document.getElementById('f-status');
-            var fPassword = document.getElementById('f-password');
-
-            function setSelect(select, value) {
-                if (value) {
-                    select.value = value;
-                } else {
-                    select.selectedIndex = 0;
-                }
-            }
-
-            modal.addEventListener('show.bs.modal', function(event) {
-                var btn = event.relatedTarget;
-                if (!btn) return;
-
-                var isEdit = btn.dataset.mode === 'edit';
-
-                modeInput.value = isEdit ? 'edit' : 'create';
-                idInput.value = isEdit ? (btn.dataset.id || '') : '';
-                methodInput.value = isEdit ? 'PUT' : 'POST';
-                form.action = isEdit ?
-                    form.dataset.updateUrl.replace('__ID__', btn.dataset.id) :
-                    form.dataset.storeUrl;
-                title.textContent = isEdit ? 'Ubah Admin' : 'Tambah Admin';
-
-                fName.value = btn.dataset.name || '';
-                fEmail.value = btn.dataset.email || '';
-                setSelect(fStatus, btn.dataset.status);
-
-                fPassword.value = '';
-                fPassword.required = !isEdit;
-                fPassword.placeholder = isEdit ? 'Kosongkan jika tidak diubah' : '';
+        // 1. Notifikasi SweetAlert Sukses
+        @if (session('status'))
+            Swal.fire({
+                title: "Berhasil!",
+                text: "{{ session('status') }}",
+                icon: "success",
+                draggable: true,
+                confirmButtonText: "OK"
             });
+        @endif
 
-            document.querySelectorAll('.btn-delete').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    Swal.fire({
-                        title: 'Hapus admin?',
-                        text: 'Admin "' + btn.dataset.name + '" akan dihapus.',
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonText: 'Ya, hapus',
-                        cancelButtonText: 'Batal'
-                    }).then(function(r) {
-                        if (r.isConfirmed) {
-                            var f = document.getElementById('delete-form');
-                            f.action = btn.dataset.url;
-                            f.submit();
-                        }
-                    });
+        // 2. Notifikasi SweetAlert Gagal / Error
+        @if (session('error'))
+            Swal.fire({
+                title: "Gagal!",
+                text: "{{ session('error') }}",
+                icon: "error",
+                draggable: true,
+                confirmButtonText: "Tutup"
+            });
+        @endif
+
+        // 3. Konfirmasi Hapus Data dengan SweetAlert
+        document.querySelectorAll('.btn-delete').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                Swal.fire({
+                    title: 'Hapus data ini?',
+                    text: 'Data "' + btn.dataset.name + '" akan dihapus permanen.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Ya, hapus!',
+                    cancelButtonText: 'Batal',
+                    draggable: true
+                }).then(function(r) {
+                    if (r.isConfirmed) {
+                        var f = document.getElementById('delete-form');
+                        f.action = btn.dataset.url;
+                        f.submit();
+                    }
                 });
             });
-
-            document.addEventListener('DOMContentLoaded', function() {
-                var reopen = document.getElementById('reopen-modal');
-                if (reopen) reopen.click();
-            });
-        })();
+        });
     </script>
 @endpush

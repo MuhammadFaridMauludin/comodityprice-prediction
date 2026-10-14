@@ -27,7 +27,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'dashboardadmin'])->name('dashboardadmin');
     Route::get('/cuaca', [DataController::class, 'cuaca'])->name('cuaca');
-    Route::get('/peng', [DataController::class, 'harga'])->name('harga');
+    Route::get('/harga', [DataController::class, 'harga'])->name('harga');
     Route::get('/model', [ModelController::class, 'model'])->name('model');
 
     Route::get('/pengguna', [UserController::class, 'index'])->name('pengguna');
