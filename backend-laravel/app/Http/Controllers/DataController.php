@@ -50,8 +50,8 @@ class DataController extends Controller
             'columns' => [
                 'No', 'Tanggal', 'Komoditas', 'Wilayah',
                 ['label' => 'Harga', 'align' => 'right'],
-                'status',
-                ['label' => 'Aksi', 'align' => 'right'],
+                // 'status',
+                // ['label' => 'Aksi', 'align' => 'right'],
             ],
         ]);
     }
@@ -90,8 +90,8 @@ class DataController extends Controller
                 ['label' => 'Suhu', 'align' => 'right'],
                 ['label' => 'Curah Hujan', 'align' => 'right'],
                 ['label' => 'Kelembapan', 'align' => 'right'],
-                'Status',
-                ['label' => 'Aksi', 'align' => 'right'],
+                // 'Status',
+                // ['label' => 'Aksi', 'align' => 'right'],
             ],
         ]);
     }

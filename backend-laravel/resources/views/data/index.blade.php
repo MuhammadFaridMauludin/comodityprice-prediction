@@ -16,9 +16,9 @@
             </ul>
 
             <x-admin.card :title="$type === 'harga' ? 'Data Harga Komoditas' : 'Data Cuaca'" :flush="true">
-                <x-slot name="actions">
+                {{-- <x-slot name="actions">
                     <a href="#" class="btn btn-sm btn-primary"><i class="ti ti-plus"></i> Tambah Data</a>
-                </x-slot>
+                </x-slot> --}}
 
                 {{-- Komponen Filter --}}
                 <x-admin.filters :selects="$selects" :date="true" />
@@ -46,15 +46,14 @@
                             @endif
 
                             {{-- Badge Status --}}
-                            <td><x-admin.badge :status="$row->status ?? 'normal'" /></td>
-
+                            {{-- <td><x-admin.badge :status="$row->status ?? 'normal'" /></td> --}}
                             {{-- Tombol Aksi --}}
-                            <td class="text-end">
+                            {{-- <td class="text-end">
                                 <a href="#" class="btn btn-icon btn-sm btn-ghost-secondary" aria-label="Ubah"><i
                                         class="ti ti-pencil"></i></a>
                                 <button type="button" class="btn btn-icon btn-sm btn-ghost-danger btn-delete"
                                     aria-label="Hapus"><i class="ti ti-trash"></i></button>
-                            </td>
+                            </td> --}}
                         </tr>
                     @empty
                         <tr>
