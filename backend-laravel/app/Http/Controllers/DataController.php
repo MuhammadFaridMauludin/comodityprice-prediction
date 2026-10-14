@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Harga;
-use App\Models\Komoditas; // Model tabel komoditas
-use App\Models\Wilayah;    // Model tabel wilayah
+use App\Models\Komoditas;
+use App\Models\Wilayah;
+use App\Models\cuaca;
+use App\Models\koordinatcuaca;
 use App\Support\DummyData;
 use App\Support\DummyUsers;
 use Illuminate\Http\Request;
@@ -50,21 +52,31 @@ class DataController extends Controller
 
     public function cuaca(Request $request)
     {
-        $rows = DummyData::filter(
-            DummyData::weather(),
-            $request,
-            ['wilayah' => 'region', 'status' => 'status']
-        );
+       // 1. Eager Loading memanggil nama fungsi relasi di Model Cuaca (koordinat)
+        $query = Cuaca::with(['koordinat']);
+
+        // 2. Filter berdasarkan id_koordinat
+        $query->when($request->filled('koordinat_cuaca'), function ($q) use ($request) {
+            $q->where('id_koordinat', $request->koordinat_cuaca);
+        });
+
+        // 3. Paginasi berdasarkan tanggal terbaru
+        $rows = $query->orderBy('tanggal', 'desc')->paginate(10)->withQueryString();
+
+        // 4. Ambil dropdown pilihan dari Model KoordinatCuaca (bukan Komoditas)
+        // Sesuaikan 'nama_koordinat' dengan nama kolom lokasi di tabel koordinat_cuaca Anda
+        $selects = [
+            'koordinat_cuaca' => KoordinatCuaca::pluck('nama_koordinat', 'id_koordinat'),
+        ];
 
         return view('data.index', [
             'type'    => 'cuaca',
-            'rows'    => DummyData::paginate($rows, $request, 10),
-            'selects' => [
-                'wilayah' => DummyData::REGIONS,
-                'status'  => DummyData::DATA_STATUSES,
-            ],
+            'rows'    => $rows,
+            'selects' => $selects,
             'columns' => [
-                'No', 'Tanggal', 'Wilayah',
+                'No',
+                'Tanggal',
+                'Lokasi / Koordinat',
                 ['label' => 'Suhu', 'align' => 'right'],
                 ['label' => 'Curah Hujan', 'align' => 'right'],
                 ['label' => 'Kelembapan', 'align' => 'right'],

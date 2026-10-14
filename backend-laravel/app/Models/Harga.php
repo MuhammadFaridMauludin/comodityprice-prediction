@@ -14,6 +14,8 @@ class Harga extends Model
 
     // Masukkan nama kolom sesuai yang dibuat di DBeaver
     protected $fillable = [
+        'id_komoditas',
+        'id_wilayah',
         'tanggal',
         'harga',
 

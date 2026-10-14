@@ -30,18 +30,19 @@
                             <td>{{ \Carbon\Carbon::parse($row->tanggal)->translatedFormat('d M Y') }}</td>
 
                             @if ($type === 'harga')
-                                {{-- 2. Mengambil nama komoditas dan wilayah dari relasi Eloquent --}}
+                                {{-- Data Harga --}}
                                 <td>{{ $row->komoditas?->nama_komoditas ?? '-' }}</td>
                                 <td>{{ $row->wilayah?->nama_wilayah ?? '-' }}</td>
                                 <td class="text-end">Rp {{ number_format($row->harga, 0, ',', '.') }}</td>
                             @else
-                                <td>{{ $row->wilayah?->nama_wilayah ?? '-' }}</td>
-                                <td class="text-end">{{ $row->temp }} °C</td>
-                                <td class="text-end">{{ $row->rain }} mm</td>
-                                <td class="text-end">{{ $row->humidity }}%</td>
+                                {{-- Data Cuaca (Disesuaikan dengan nama kolom DB & relasi koordinat) --}}
+                                <td>{{ $row->koordinat?->nama_koordinat ?? '-' }}</td>
+                                <td class="text-end">{{ $row->suhu }} °C</td>
+                                <td class="text-end">{{ $row->curah_hujan }} mm</td>
+                                <td class="text-end">{{ $row->kelembapan }}%</td>
                             @endif
 
-                            {{-- 3. Status (Backslash \ yang nyasar sudah dihapus) --}}
+                            {{-- Status --}}
                             <td><x-admin.badge :status="$row->status ?? 'normal'" /></td>
 
                             <td class="text-end">
@@ -56,7 +57,7 @@
                             <td colspan="{{ count($columns) }}" class="text-center text-secondary py-4">Tidak ada data yang
                                 sesuai filter.</td>
                         </tr>
-                    @endforelse {{-- Duplikasi @empty sebelum tag ini sudah dihapus --}}
+                    @endforelse
                 </x-admin.table>
 
                 <x-slot name="footer">
