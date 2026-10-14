@@ -8,6 +8,7 @@ use App\Http\Controllers\DataController;
 use App\Http\Controllers\ModelController;
 use App\Http\Controllers\EvaluasiController;
 use App\Http\Controllers\WawasanController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -29,8 +30,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/peng', [DataController::class, 'harga'])->name('harga');
     Route::get('/model', [ModelController::class, 'model'])->name('model');
 
-    Route::get('/pengguna', [DataController::class, 'pengguna'])->name('pengguna');
-    Route::post('/pengguna', [DataController::class, 'penggunaStore'])->name('pengguna.store');
-    Route::put('/pengguna/{id}', [DataController::class, 'penggunaUpdate'])->whereNumber('id')->name('pengguna.update');
-    Route::delete('/pengguna/{id}', [DataController::class, 'penggunaDestroy'])->whereNumber('id')->name('pengguna.destroy');
+    Route::get('/pengguna', [UserController::class, 'index'])->name('pengguna');
+    Route::post('/pengguna', [UserController::class, 'store'])->name('pengguna.store');
+    Route::get('/pengguna/{id}/edit', [UserController::class, 'edit'])->name('pengguna.edit');
+    Route::put('/pengguna/{id}', [UserController::class, 'update'])->name('pengguna.update');
+    Route::delete('/pengguna/{id}', [UserController::class, 'delete'])->name('pengguna.delete');
 });

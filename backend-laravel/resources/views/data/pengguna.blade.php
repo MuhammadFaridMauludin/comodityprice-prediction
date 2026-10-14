@@ -1,7 +1,7 @@
 @extends('layouts.admin.tabler')
 
 @section('content')
-    <x-admin.page-header pretitle="Overview" title="Pengguna" />
+    <x-admin.page-header pretitle="Overview" title="Kelola Admin" />
 
     <div class="page-body">
         <div class="container-xl">
@@ -19,59 +19,50 @@
                 </div>
             @endif
 
-            <x-admin.card title="Daftar Pengguna" :flush="true">
+            <x-admin.card title="Daftar Admin" :flush="true">
                 <x-slot name="actions">
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
                         data-bs-target="#modal-user" data-mode="create">
-                        <i class="ti ti-plus"></i> Tambah Pengguna
+                        <i class="ti ti-plus"></i> Tambah Admin
                     </button>
                 </x-slot>
 
                 <x-admin.filters :selects="$selects" :search="true" />
 
-                <x-admin.table :columns="[
-                    'No',
-                    'Nama',
-                    'Email',
-                    'Peran',
-                    'Status',
-                    'Login terakhir',
-                    ['label' => 'Aksi', 'align' => 'right'],
-                ]">
+                <x-admin.table :columns="['No', 'Nama', 'Email', 'Status', 'Login terakhir', ['label' => 'Aksi', 'align' => 'right']]">
                     @forelse ($users as $u)
                         <tr>
                             <td>{{ $users->firstItem() + $loop->index }}</td>
                             <td>
                                 <div class="d-flex align-items-center">
                                     <span
-                                        class="avatar avatar-sm me-2">{{ mb_strtoupper(mb_substr($u['name'], 0, 1)) }}</span>
-                                    <span>{{ $u['name'] }}</span>
+                                        class="avatar avatar-sm me-2">{{ mb_strtoupper(mb_substr($u->name, 0, 1)) }}</span>
+                                    <span>{{ $u->name }}</span>
                                 </div>
                             </td>
-                            <td class="text-secondary">{{ $u['email'] }}</td>
-                            <td>{{ $u['role'] }}</td>
-                            <td><x-admin.badge :status="$u['status']" /></td>
+                            <td class="text-secondary">{{ $u->email }}</td>
+                            <td><x-admin.badge :status="$u->status" /></td>
                             <td class="text-secondary">
-                                {{ $u['last_login'] ? \Illuminate\Support\Carbon::parse($u['last_login'])->diffForHumans() : 'Belum pernah' }}
+                                {{ $u->last_login_at ? \Illuminate\Support\Carbon::parse($u->last_login_at)->diffForHumans() : 'Belum pernah' }}
                             </td>
                             <td class="text-end">
                                 <button type="button" class="btn btn-icon btn-sm btn-ghost-secondary" aria-label="Ubah"
                                     data-bs-toggle="modal" data-bs-target="#modal-user" data-mode="edit"
-                                    data-id="{{ $u['id'] }}" data-name="{{ $u['name'] }}"
-                                    data-email="{{ $u['email'] }}" data-role="{{ $u['role'] }}"
-                                    data-status="{{ $u['status'] }}">
+                                    data-id="{{ $u->id }}" data-name="{{ $u->name }}"
+                                    data-email="{{ $u->email }}" data-status="{{ $u->status }}">
                                     <i class="ti ti-pencil"></i>
                                 </button>
                                 <button type="button" class="btn btn-icon btn-sm btn-ghost-danger btn-delete"
-                                    aria-label="Hapus" data-name="{{ $u['name'] }}"
-                                    data-url="{{ route('pengguna.destroy', $u['id']) }}">
+                                    aria-label="Hapus" data-name="{{ $u->name }}"
+                                    data-url="{{ route('pengguna.delete', $u->id) }}">
                                     <i class="ti ti-trash"></i>
                                 </button>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center text-secondary py-4">Tidak ada pengguna yang sesuai.</td>
+                            <td colspan="6" class="text-center text-secondary py-4">Tidak ada data admin yang sesuai.
+                            </td>
                         </tr>
                     @endforelse
                 </x-admin.table>
@@ -83,7 +74,7 @@
         </div>
     </div>
 
-    {{-- Modal tambah / ubah (satu modal untuk keduanya) --}}
+    {{-- Modal Tambah / Ubah --}}
     <div class="modal modal-blur fade" id="modal-user" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <form class="modal-content" method="POST" id="user-form" action="{{ route('pengguna.store') }}"
@@ -94,7 +85,7 @@
                 <input type="hidden" name="form_id" id="user-id" value="">
 
                 <div class="modal-header">
-                    <h5 class="modal-title" id="user-title">Tambah Pengguna</h5>
+                    <h5 class="modal-title" id="user-title">Tambah Admin</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
                 </div>
 
@@ -117,31 +108,17 @@
                         @enderror
                     </div>
 
-                    <div class="row g-3 mb-3">
-                        <div class="col-sm-6">
-                            <label class="form-label" for="f-role">Peran</label>
-                            <select id="f-role" name="role"
-                                class="form-select {{ $errors->has('role') ? 'is-invalid' : '' }}">
-                                @foreach ($roles as $role)
-                                    <option value="{{ $role }}">{{ $role }}</option>
-                                @endforeach
-                            </select>
-                            @error('role')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-sm-6">
-                            <label class="form-label" for="f-status">Status</label>
-                            <select id="f-status" name="status"
-                                class="form-select {{ $errors->has('status') ? 'is-invalid' : '' }}">
-                                @foreach ($statuses as $status)
-                                    <option value="{{ $status }}">{{ ucfirst($status) }}</option>
-                                @endforeach
-                            </select>
-                            @error('status')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="f-status">Status</label>
+                        <select id="f-status" name="status"
+                            class="form-select {{ $errors->has('status') ? 'is-invalid' : '' }}">
+                            @foreach ($statuses as $status)
+                                <option value="{{ $status }}">{{ ucfirst($status) }}</option>
+                            @endforeach
+                        </select>
+                        @error('status')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <div class="mb-1">
@@ -162,17 +139,16 @@
         </div>
     </div>
 
-    {{-- Form tersembunyi untuk hapus --}}
+    {{-- Form Tersembunyi Hapus --}}
     <form id="delete-form" method="POST" class="d-none">
         @csrf
         @method('DELETE')
     </form>
 
-    {{-- Jika validasi gagal, buka kembali modal dengan isian sebelumnya --}}
     @if ($errors->any())
         <button type="button" id="reopen-modal" class="d-none" data-bs-toggle="modal" data-bs-target="#modal-user"
             data-mode="{{ old('form_mode', 'create') }}" data-id="{{ old('form_id') }}"
-            data-name="{{ old('name') }}" data-email="{{ old('email') }}" data-role="{{ old('role') }}"
+            data-name="{{ old('name') }}" data-email="{{ old('email') }}"
             data-status="{{ old('status') }}"></button>
     @endif
 @endsection
@@ -188,7 +164,6 @@
             var title = document.getElementById('user-title');
             var fName = document.getElementById('f-name');
             var fEmail = document.getElementById('f-email');
-            var fRole = document.getElementById('f-role');
             var fStatus = document.getElementById('f-status');
             var fPassword = document.getElementById('f-password');
 
@@ -200,7 +175,6 @@
                 }
             }
 
-            // Isi modal saat dibuka: mode tambah (kosong) atau ubah (data baris yang diklik)
             modal.addEventListener('show.bs.modal', function(event) {
                 var btn = event.relatedTarget;
                 if (!btn) return;
@@ -213,11 +187,10 @@
                 form.action = isEdit ?
                     form.dataset.updateUrl.replace('__ID__', btn.dataset.id) :
                     form.dataset.storeUrl;
-                title.textContent = isEdit ? 'Ubah Pengguna' : 'Tambah Pengguna';
+                title.textContent = isEdit ? 'Ubah Admin' : 'Tambah Admin';
 
                 fName.value = btn.dataset.name || '';
                 fEmail.value = btn.dataset.email || '';
-                setSelect(fRole, btn.dataset.role);
                 setSelect(fStatus, btn.dataset.status);
 
                 fPassword.value = '';
@@ -225,12 +198,11 @@
                 fPassword.placeholder = isEdit ? 'Kosongkan jika tidak diubah' : '';
             });
 
-            // Konfirmasi hapus
             document.querySelectorAll('.btn-delete').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     Swal.fire({
-                        title: 'Hapus pengguna?',
-                        text: 'Pengguna "' + btn.dataset.name + '" akan dihapus.',
+                        title: 'Hapus admin?',
+                        text: 'Admin "' + btn.dataset.name + '" akan dihapus.',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Ya, hapus',
@@ -245,7 +217,6 @@
                 });
             });
 
-            // Jika validasi gagal, buka kembali modal dengan isian sebelumnya
             document.addEventListener('DOMContentLoaded', function() {
                 var reopen = document.getElementById('reopen-modal');
                 if (reopen) reopen.click();
