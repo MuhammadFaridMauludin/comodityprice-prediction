@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Harga;
+use App\Models\Komoditas; // Model tabel komoditas
+use App\Models\Wilayah;    // Model tabel wilayah
 use App\Support\DummyData;
 use App\Support\DummyUsers;
 use Illuminate\Http\Request;
@@ -12,24 +15,34 @@ class DataController extends Controller
 {
     public function harga(Request $request)
     {
-        $rows = DummyData::filter(
-            DummyData::prices(),
-            $request,
-            ['komoditas' => 'commodity', 'wilayah' => 'region', 'status' => 'status']
-        );
+        // 1. Buat query dengan Eager Loading ('with') agar nama komoditas & wilayah ikut terambil
+        $query = Harga::with(['komoditas', 'wilayah']);
+
+        // 2. Filter berdasarkan ID komoditas & ID wilayah
+        $query->when($request->filled('komoditas'), function ($q) use ($request) {
+            $q->where('id_komoditas', $request->komoditas);
+        });
+
+        $query->when($request->filled('wilayah'), function ($q) use ($request) {
+            $q->where('id_wilayah', $request->wilayah);
+        });
+
+        // 3. Paginasi berdasarkan tanggal terbaru
+        $rows = $query->orderBy('tanggal', 'desc')->paginate(10)->withQueryString();
+
+        // 4. Ambil pilihan dropdown dari master tabelnya langsung
+        $selects = [
+            'komoditas' => Komoditas::pluck('nama_komoditas', 'id_komoditas'), // id -> nama
+            'wilayah'   => Wilayah::pluck('nama_wilayah', 'id_wilayah'),
+        ];
 
         return view('data.index', [
             'type'    => 'harga',
-            'rows'    => DummyData::paginate($rows, $request, 10),
-            'selects' => [
-                'komoditas' => array_keys(DummyData::COMMODITIES),
-                'wilayah'   => array_slice(DummyData::REGIONS, 0, 4),
-                'status'    => DummyData::DATA_STATUSES,
-            ],
+            'rows'    => $rows,
+            'selects' => $selects,
             'columns' => [
                 'No', 'Tanggal', 'Komoditas', 'Wilayah',
                 ['label' => 'Harga', 'align' => 'right'],
-                'Status',
                 ['label' => 'Aksi', 'align' => 'right'],
             ],
         ]);

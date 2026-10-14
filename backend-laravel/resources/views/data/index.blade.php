@@ -25,20 +25,25 @@
                     @forelse ($rows as $row)
                         <tr>
                             <td>{{ $rows->firstItem() + $loop->index }}</td>
-                            <td>{{ $row['date']->translatedFormat('d M Y') }}</td>
+
+                            {{-- 1. Tanggal --}}
+                            <td>{{ \Carbon\Carbon::parse($row->tanggal)->translatedFormat('d M Y') }}</td>
 
                             @if ($type === 'harga')
-                                <td>{{ $row['commodity'] }}</td>
-                                <td>{{ $row['region'] }}</td>
-                                <td class="text-end">Rp {{ number_format($row['price'], 0, ',', '.') }}</td>
+                                {{-- 2. Mengambil nama komoditas dan wilayah dari relasi Eloquent --}}
+                                <td>{{ $row->komoditas?->nama_komoditas ?? '-' }}</td>
+                                <td>{{ $row->wilayah?->nama_wilayah ?? '-' }}</td>
+                                <td class="text-end">Rp {{ number_format($row->harga, 0, ',', '.') }}</td>
                             @else
-                                <td>{{ $row['region'] }}</td>
-                                <td class="text-end">{{ $row['temp'] }} °C</td>
-                                <td class="text-end">{{ $row['rain'] }} mm</td>
-                                <td class="text-end">{{ $row['humidity'] }}%</td>
+                                <td>{{ $row->wilayah?->nama_wilayah ?? '-' }}</td>
+                                <td class="text-end">{{ $row->temp }} °C</td>
+                                <td class="text-end">{{ $row->rain }} mm</td>
+                                <td class="text-end">{{ $row->humidity }}%</td>
                             @endif
 
-                            <td><x-admin.badge :status="$row['status']" /></td>
+                            {{-- 3. Status (Backslash \ yang nyasar sudah dihapus) --}}
+                            <td><x-admin.badge :status="$row->status ?? 'normal'" /></td>
+
                             <td class="text-end">
                                 <a href="#" class="btn btn-icon btn-sm btn-ghost-secondary" aria-label="Ubah"><i
                                         class="ti ti-pencil"></i></a>
@@ -51,7 +56,7 @@
                             <td colspan="{{ count($columns) }}" class="text-center text-secondary py-4">Tidak ada data yang
                                 sesuai filter.</td>
                         </tr>
-                    @endforelse
+                    @endforelse {{-- Duplikasi @empty sebelum tag ini sudah dihapus --}}
                 </x-admin.table>
 
                 <x-slot name="footer">
