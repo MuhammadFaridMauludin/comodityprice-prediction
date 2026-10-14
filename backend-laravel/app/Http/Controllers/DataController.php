@@ -17,24 +17,29 @@ class DataController extends Controller
 {
     public function harga(Request $request)
     {
-        // 1. Buat query dengan Eager Loading ('with') agar nama komoditas & wilayah ikut terambil
+        //query dengan Eager Loading untuk memanggil relasi
         $query = Harga::with(['komoditas', 'wilayah']);
-
-        // 2. Filter berdasarkan ID komoditas & ID wilayah
+        //Filter komoditas
         $query->when($request->filled('komoditas'), function ($q) use ($request) {
             $q->where('id_komoditas', $request->komoditas);
         });
-
+        //filter wilayah
         $query->when($request->filled('wilayah'), function ($q) use ($request) {
             $q->where('id_wilayah', $request->wilayah);
         });
-
-        // 3. Paginasi berdasarkan tanggal terbaru
+        // Filter tgl mulai
+        $query->when($request->filled('tgl_mulai'), function ($q) use ($request) {
+        $q->whereDate('tanggal', '>=', $request->tgl_mulai);
+        });
+        // Filter tgl selesai
+        $query->when($request->filled('tgl_selesai'), function ($q) use ($request) {
+        $q->whereDate('tanggal', '<=', $request->tgl_selesai);
+        });
+        //pagination tgl terbaru
         $rows = $query->orderBy('tanggal', 'desc')->paginate(10)->withQueryString();
-
-        // 4. Ambil pilihan dropdown dari master tabelnya langsung
+        //pilihan dropdown
         $selects = [
-            'komoditas' => Komoditas::pluck('nama_komoditas', 'id_komoditas'), // id -> nama
+            'komoditas' => Komoditas::pluck('nama_komoditas', 'id_komoditas'),
             'wilayah'   => Wilayah::pluck('nama_wilayah', 'id_wilayah'),
         ];
 
@@ -45,6 +50,7 @@ class DataController extends Controller
             'columns' => [
                 'No', 'Tanggal', 'Komoditas', 'Wilayah',
                 ['label' => 'Harga', 'align' => 'right'],
+                'status',
                 ['label' => 'Aksi', 'align' => 'right'],
             ],
         ]);
@@ -52,19 +58,23 @@ class DataController extends Controller
 
     public function cuaca(Request $request)
     {
-       // 1. Eager Loading memanggil nama fungsi relasi di Model Cuaca (koordinat)
+        //query dengan Eager Loading untuk memanggil relasi
         $query = Cuaca::with(['koordinat']);
-
-        // 2. Filter berdasarkan id_koordinat
+        //Filter koordinat
         $query->when($request->filled('koordinat_cuaca'), function ($q) use ($request) {
             $q->where('id_koordinat', $request->koordinat_cuaca);
         });
-
-        // 3. Paginasi berdasarkan tanggal terbaru
+        // Filter tgl mulai
+        $query->when($request->filled('tgl_mulai'), function ($q) use ($request) {
+        $q->whereDate('tanggal', '>=', $request->tgl_mulai);
+        });
+        // Filter tgl selesai
+        $query->when($request->filled('tgl_selesai'), function ($q) use ($request) {
+        $q->whereDate('tanggal', '<=', $request->tgl_selesai);
+        });
+        //pagination tgl terbaru
         $rows = $query->orderBy('tanggal', 'desc')->paginate(10)->withQueryString();
-
-        // 4. Ambil dropdown pilihan dari Model KoordinatCuaca (bukan Komoditas)
-        // Sesuaikan 'nama_koordinat' dengan nama kolom lokasi di tabel koordinat_cuaca Anda
+        //pilihan dropdown
         $selects = [
             'koordinat_cuaca' => KoordinatCuaca::pluck('nama_koordinat', 'id_koordinat'),
         ];

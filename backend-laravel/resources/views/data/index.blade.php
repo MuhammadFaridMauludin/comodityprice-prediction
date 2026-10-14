@@ -5,6 +5,7 @@
 
     <div class="page-body">
         <div class="container-xl">
+            {{-- Navigation Tabs --}}
             <ul class="nav nav-pills mb-3">
                 <li class="nav-item">
                     <a class="nav-link {{ $type === 'harga' ? 'active' : '' }}" href="{{ route('harga') }}">Data Komoditas</a>
@@ -19,32 +20,35 @@
                     <a href="#" class="btn btn-sm btn-primary"><i class="ti ti-plus"></i> Tambah Data</a>
                 </x-slot>
 
+                {{-- Komponen Filter --}}
                 <x-admin.filters :selects="$selects" :date="true" />
 
+                {{-- Tabel Data --}}
                 <x-admin.table :columns="$columns">
                     @forelse ($rows as $row)
                         <tr>
                             <td>{{ $rows->firstItem() + $loop->index }}</td>
 
-                            {{-- 1. Tanggal --}}
+                            {{-- Tanggal --}}
                             <td>{{ \Carbon\Carbon::parse($row->tanggal)->translatedFormat('d M Y') }}</td>
 
                             @if ($type === 'harga')
-                                {{-- Data Harga --}}
+                                {{-- Kolom Khusus Data Harga --}}
                                 <td>{{ $row->komoditas?->nama_komoditas ?? '-' }}</td>
                                 <td>{{ $row->wilayah?->nama_wilayah ?? '-' }}</td>
                                 <td class="text-end">Rp {{ number_format($row->harga, 0, ',', '.') }}</td>
                             @else
-                                {{-- Data Cuaca (Disesuaikan dengan nama kolom DB & relasi koordinat) --}}
+                                {{-- Kolom Khusus Data Cuaca --}}
                                 <td>{{ $row->koordinat?->nama_koordinat ?? '-' }}</td>
-                                <td class="text-end">{{ $row->suhu }} °C</td>
-                                <td class="text-end">{{ $row->curah_hujan }} mm</td>
-                                <td class="text-end">{{ $row->kelembapan }}%</td>
+                                <td class="text-end">{{ $row->suhu ?? 0 }} °C</td>
+                                <td class="text-end">{{ $row->curah_hujan ?? 0 }} mm</td>
+                                <td class="text-end">{{ $row->kelembapan ?? 0 }}%</td>
                             @endif
 
-                            {{-- Status --}}
+                            {{-- Badge Status --}}
                             <td><x-admin.badge :status="$row->status ?? 'normal'" /></td>
 
+                            {{-- Tombol Aksi --}}
                             <td class="text-end">
                                 <a href="#" class="btn btn-icon btn-sm btn-ghost-secondary" aria-label="Ubah"><i
                                         class="ti ti-pencil"></i></a>
@@ -60,6 +64,7 @@
                     @endforelse
                 </x-admin.table>
 
+                {{-- Pagination --}}
                 <x-slot name="footer">
                     {{ $rows->links('vendor.pagination.tabler') }}
                 </x-slot>
