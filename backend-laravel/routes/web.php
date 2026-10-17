@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'dashboardadmin'])->name('dashboardadmin');
     Route::get('/cuaca', [DataController::class, 'cuaca'])->name('cuaca');
     Route::get('/harga', [DataController::class, 'harga'])->name('harga');
+    Route::post('/harga/scrape', [DataController::class, 'scrapeHarga'])->name('harga.scrape');
+    Route::post('/cuaca/scrape', [DataController::class, 'scrapeCuaca'])->name('cuaca.scrape');
     Route::get('/model', [ModelController::class, 'model'])->name('model');
 
     Route::get('/pengguna', [UserController::class, 'index'])->name('pengguna');
