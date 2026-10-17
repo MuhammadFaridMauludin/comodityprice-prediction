@@ -52,10 +52,11 @@ class UserController extends Controller
     }
 
     public function edit(int $id)
-    {
-        $user = User::findOrFail($id);
-        return response()->json($user);
-    }
+{
+    $user = User::findOrFail($id);
+
+    return response()->json($user->only(['id', 'name', 'email', 'status']));
+}
 
     public function update(Request $request, int $id)
     {
