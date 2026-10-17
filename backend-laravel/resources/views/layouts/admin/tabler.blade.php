@@ -49,7 +49,16 @@
         <!-- Navbar -->
         @include('layouts.admin.header')
 
+
         <div class="page-wrapper">
+            @foreach (['success', 'warning', 'error'] as $tipe)
+                @if (session($tipe))
+                    <div class="container-xl pt-3">
+                        <div class="alert alert-{{ $tipe === 'error' ? 'danger' : $tipe }} mb-0">{{ session($tipe) }}
+                        </div>
+                    </div>
+                @endif
+            @endforeach
             @yield('content')
             <!-- footer -->
             @include('layouts.admin.footer')
