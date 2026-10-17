@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\DummyData;
+use App\Models\SystemLog;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -43,22 +44,23 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function dashboardadmin(Request $request)
-    {
-        $logs = DummyData::filter(
-            DummyData::logs(),
-            $request,
-            ['proses' => 'process', 'status' => 'status']
-        );
+   public function dashboardadmin(Request $request)
+{
+    $logs = SystemLog::query()
+        ->when($request->proses, fn ($q, $v) => $q->where('process', $v))
+        ->when($request->status, fn ($q, $v) => $q->where('status', $v))
+        ->latest('logged_at')
+        ->paginate(10)
+        ->withQueryString();
 
-        return view('dashboard.dashboardadmin', [
-            'pipeline'  => DummyData::pipeline(),
-            'updatedAt' => now(),
-            'logs'      => DummyData::paginate($logs, $request, 10),
-            'selects'   => [
-                'proses' => DummyData::processes(),
-                'status' => ['sukses', 'peringatan', 'gagal'],
-            ],
-        ]);
-    }
+    return view('dashboard.dashboardadmin', [
+        'pipeline'  => DummyData::pipeline(),
+        'updatedAt' => now(),
+        'logs'      => $logs,
+        'selects'   => [
+            'proses' => SystemLog::distinct()->orderBy('process')->pluck('process')->all(),
+            'status' => ['sukses', 'peringatan', 'gagal'],
+        ],
+    ]);
+}
 }

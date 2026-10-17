@@ -39,12 +39,12 @@
                             @forelse ($logs as $row)
                                 <tr>
                                     <td>{{ $logs->firstItem() + $loop->index }}</td>
-                                    <td>{{ $row['time']->translatedFormat('d M Y H:i') }}</td>
-                                    <td>{{ $row['process'] }}</td>
-                                    <td>{{ $row['source'] }}</td>
-                                    <td><x-admin.badge :status="$row['status']" /></td>
-                                    <td class="text-end">{{ number_format($row['duration'], 1, ',', '.') }} dtk</td>
-                                    <td class="text-secondary">{{ $row['message'] }}</td>
+                                    <td>{{ $row->logged_at->translatedFormat('d M Y H:i') }}</td>
+                                    <td>{{ $row->process }}</td>
+                                    <td>{{ $row->source }}</td>
+                                    <td><x-admin.badge :status="$row->status" /></td>
+                                    <td class="text-end">{{ number_format($row->duration, 1, ',', '.') }} dtk</td>
+                                    <td class="text-secondary">{{ $row->message }}</td>
                                 </tr>
                             @empty
                                 <tr>
