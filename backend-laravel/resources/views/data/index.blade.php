@@ -2,7 +2,6 @@
 
 @section('content')
     <x-admin.page-header pretitle="Overview" title="Data Management" />
-
     <div class="page-body">
         <div class="container-xl">
             {{-- Navigation Tabs --}}
@@ -19,6 +18,11 @@
                 {{-- <x-slot name="actions">
                     <a href="#" class="btn btn-sm btn-primary"><i class="ti ti-plus"></i> Tambah Data</a>
                 </x-slot> --}}
+                @if (isset($scrape))
+                    <x-slot name="actions">
+                        <x-admin.scrape-button :route="$scrape['route'] ?? route('harga.scrape')" :label="$scrape['label'] ?? 'Scraping Harga'" :terakhir="$scrape['terakhir'] ?? null" />
+                    </x-slot>
+                @endif
 
                 {{-- Komponen Filter --}}
                 <x-admin.filters :selects="$selects" :date="true" />
@@ -57,7 +61,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ count($columns) }}" class="text-center text-secondary py-4">Tidak ada data yang
+                            <td colspan="{{ count($columns) }}" class="text-center text-secondary py-4">Tidak ada data
+                                yang
                                 sesuai filter.</td>
                         </tr>
                     @endforelse
