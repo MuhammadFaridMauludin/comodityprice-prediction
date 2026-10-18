@@ -6,7 +6,7 @@
     <div class="page-body">
         <div class="container-xl">
             <div class="row row-cards">
-                <div class="col-12">
+                <div class="col-12" id="pipeline-wrapper">
                     <x-admin.card title="Monitoring Pipeline">
                         <x-slot name="actions">
                             <span class="text-secondary small">Update terakhir: {{ $updatedAt->format('d-m-Y H:i') }}</span>
@@ -14,7 +14,7 @@
 
                         <div class="row g-3">
                             @foreach ($pipeline as $p)
-                                <div class="col-sm-6 col-lg-3">
+                                <div class="col-sm-6 col-lg-{{ intdiv(12, max(count($pipeline), 1)) }}">
                                     <x-admin.stat :flat="true" :label="$p['label']" :value="$p['value']" :icon="$p['icon']"
                                         :color="$p['color']" :note="$p['note']" />
                                 </div>
@@ -63,3 +63,22 @@
         </div>
     </div>
 @endsection
+@push('myscript')
+    <script>
+        setInterval(async function() {
+            try {
+                const res = await fetch(location.href, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                if (!res.ok) return;
+
+                const html = new DOMParser().parseFromString(await res.text(), 'text/html');
+                const baru = html.getElementById('pipeline-wrapper');
+                if (baru) document.getElementById('pipeline-wrapper').innerHTML = baru.innerHTML;
+            } catch (e) {
+                /* abaikan, coba lagi di putaran berikutnya */ }
+        }, 60000);
+    </script>
+@endpush
