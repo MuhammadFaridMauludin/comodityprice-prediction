@@ -2,6 +2,10 @@ import os
 import subprocess
 import sys
 from typing import Optional
+import json
+from datetime import date
+from pydantic import BaseModel
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
@@ -15,6 +19,15 @@ API_KEY = os.getenv("ML_SERVICE_KEY")
 PRICE_DIR = os.path.join(BASE_DIR, "scraping", "price")
 WEATHER_DIR = os.path.join(BASE_DIR, "scraping", "weather")
 
+TRAINING_DIR = os.path.join(BASE_DIR, "training")
+
+state_training = {
+    "berjalan": False,
+    "status": "idle",
+    "request": None,
+    "result": None,
+    "error": None,
+}
 # nama komoditas -> file script
 SCRIPTS = {
     "bawang-merah": "bawangmerah.py",
@@ -36,6 +49,40 @@ def cek_key(x_api_key):
     if not API_KEY or x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="API key salah")
 
+class TrainRequest(BaseModel):
+    komoditas: int
+    wilayah: int
+    dari: date
+    sampai: date
+    model: Literal["LSTM", "BiLSTM", "GRU"]
+    arsitektur: Literal["A", "B"]
+    strategi: Literal["ST-1", "ST-2", "ST-3"]
+
+
+def ambil_json_hasil(output: str):
+    """
+    Mencari objek JSON hasil eksperimen pada stdout train.py.
+    Output training dapat berisi log TensorFlow sebelum JSON.
+    """
+    decoder = json.JSONDecoder()
+
+    for posisi, karakter in enumerate(output):
+        if karakter != "{":
+            continue
+
+        try:
+            obj, _ = decoder.raw_decode(output[posisi:])
+        except json.JSONDecodeError:
+            continue
+
+        if (
+            isinstance(obj, dict)
+            and "kode_skenario" in obj
+            and "metrik" in obj
+        ):
+            return obj
+
+    return None
 
 def jalankan_script(state, folder, daftar_script):
     """Jalankan script satu per satu. Tiap script mencatat log-nya sendiri."""
@@ -50,6 +97,75 @@ def jalankan_script(state, folder, daftar_script):
     finally:
         state["berjalan"] = False
 
+def jalankan_training(params: dict):
+    try:
+        command = [
+            sys.executable,
+            "train.py",
+            "--komoditas", str(params["komoditas"]),
+            "--wilayah", str(params["wilayah"]),
+            "--dari", params["dari"],
+            "--sampai", params["sampai"],
+            "--model", params["model"],
+            "--arsitektur", params["arsitektur"],
+            "--strategi", params["strategi"],
+        ]
+
+        proses = subprocess.run(
+            command,
+            cwd=TRAINING_DIR,
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+
+        if proses.returncode != 0:
+            detail = proses.stderr or proses.stdout
+
+            state_training.update({
+                "status": "failed",
+                "berjalan": False,
+                "error": detail[-3000:],
+                "result": None,
+            })
+            return
+
+        hasil = ambil_json_hasil(proses.stdout)
+
+        if hasil is None:
+            state_training.update({
+                "status": "failed",
+                "berjalan": False,
+                "error": (
+                    "Training selesai, tetapi JSON hasil eksperimen "
+                    "tidak ditemukan pada output train.py."
+                ),
+                "result": None,
+            })
+            return
+
+        state_training.update({
+            "status": "completed",
+            "berjalan": False,
+            "error": None,
+            "result": hasil,
+        })
+
+    except subprocess.TimeoutExpired:
+        state_training.update({
+            "status": "failed",
+            "berjalan": False,
+            "error": "Training melewati batas waktu 3600 detik.",
+            "result": None,
+        })
+
+    except Exception as exc:
+        state_training.update({
+            "status": "failed",
+            "berjalan": False,
+            "error": str(exc),
+            "result": None,
+        })
 
 # HARGA
 @app.post("/scrape/harga", status_code=202)
@@ -110,4 +226,64 @@ def health():
         "status": "ok",
         "scraping_harga": state_harga["berjalan"],
         "scraping_cuaca": state_cuaca["berjalan"],
+        "training": state_training["berjalan"],
     }
+
+@app.post("/train", status_code=202)
+def mulai_training(
+    request: TrainRequest,
+    background: BackgroundTasks,
+    x_api_key: str = Header(None),
+):
+    cek_key(x_api_key)
+
+    if state_training["berjalan"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Training masih berjalan.",
+        )
+
+    if request.sampai < request.dari:
+        raise HTTPException(
+            status_code=422,
+            detail="Tanggal akhir harus sama atau setelah tanggal awal.",
+        )
+
+    if not os.path.isfile(os.path.join(TRAINING_DIR, "train.py")):
+        raise HTTPException(
+            status_code=500,
+            detail="File training/train.py tidak ditemukan.",
+        )
+
+    params = {
+        "komoditas": request.komoditas,
+        "wilayah": request.wilayah,
+        "dari": request.dari.isoformat(),
+        "sampai": request.sampai.isoformat(),
+        "model": request.model,
+        "arsitektur": request.arsitektur,
+        "strategi": request.strategi,
+    }
+
+    state_training.update({
+        "berjalan": True,
+        "status": "running",
+        "request": params,
+        "result": None,
+        "error": None,
+    })
+
+    background.add_task(jalankan_training, params)
+
+    return {
+        "message": "Training dimulai.",
+        "status": "running",
+        "request": params,
+    }
+
+
+@app.get("/train/status")
+def status_training(x_api_key: str = Header(None)):
+    cek_key(x_api_key)
+
+    return state_training

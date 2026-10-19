@@ -31,14 +31,14 @@ def metrics(y_true, y_pred):
 
 def run(args):
     tf.keras.utils.set_random_seed(args.seed)
-
+    print("PROGRESS:AGREGASI_CUACA", flush=True)
     # Tahap 1: Agregasikan cuaca secara otomatis
     aggregate_weather(
         id_komoditas=args.komoditas,
         dari=args.dari,
         sampai=args.sampai,
     )
-
+    print("PROGRESS:DATASET", flush=True)
     # Tahap 2: Ambil data harga dan cuaca untuk model
     df, feature_cols = load_series(
         args.komoditas,
@@ -46,7 +46,7 @@ def run(args):
         args.dari,
         args.sampai,
     )
-
+    print("PROGRESS:SPLIT", flush=True)
     d = prepare(
         df,
         FIXED["window_size"],
@@ -61,7 +61,7 @@ def run(args):
         args.arsitektur,
         args.strategi,
     )
-
+    
     model = build_model(
         args.model,
         units,
@@ -80,7 +80,7 @@ def run(args):
         ))
 
     t0 = time.time()
-
+    print("PROGRESS:TRAINING", flush=True)
     hist = model.fit(
         d["X_tr"],
         d["y_tr"],
@@ -93,7 +93,7 @@ def run(args):
     )
 
     durasi = time.time() - t0
-
+    print("PROGRESS:EVALUASI", flush=True)
     # Prediksi dan evaluasi pada skala harga asli.
     y_true = d["y_scaler"].inverse_transform(
         d["y_te"].reshape(-1, 1)
