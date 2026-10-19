@@ -104,6 +104,13 @@
                                             <option value="37">Kota Surabaya</option>
                                         </select>
                                     </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Target Prediksi</label>
+                                        <select class="form-select" name="target_mode" required>
+                                            <option value="price">Harga langsung</option>
+                                            <option value="difference">Selisih harga (Differencing)</option>
+                                        </select>
+                                    </div>
                                     <button type="submit" id="btn-train" class="btn btn-primary w-100">
                                         <i class="ti ti-player-play"></i> Training
                                     </button>

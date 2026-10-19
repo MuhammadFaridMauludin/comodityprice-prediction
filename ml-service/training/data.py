@@ -332,31 +332,38 @@ def make_windows(X, y, window):
 # 3. PREPROCESSING DAN SPLIT KRONOLOGIS
 # ============================================================
 
-def prepare(df, window, feature_cols):
+def prepare(df, window, feature_cols, target_mode="price"):
     """
-    Menyiapkan data train, validation, dan test.
+    Menyiapkan data train, validation, dan test secara kronologis.
 
-    Split dilakukan secara kronologis:
-        70% train
-        15% validation
-        15% test
+    target_mode:
+        price      : prediksi harga hari berikutnya.
+        difference : prediksi selisih harga hari berikutnya.
 
-    Scaler hanya di-fit pada data train.
-    Target prediksi adalah harga hari berikutnya.
+    Evaluasi akhir tetap menggunakan harga dalam skala rupiah.
     """
-
-    # Pastikan tanggal terurut dan tidak duplikat.
-    df = df.sort_index().copy()
-
-    if df.index.has_duplicates:
+    if target_mode not in ("price", "difference"):
         raise ValueError(
-            "Index tanggal duplikat ditemukan."
+            "target_mode harus 'price' atau 'difference'."
         )
 
-    required_cols = ["harga"] + [
-        col for col in feature_cols
-        if col != "harga"
-    ]
+    df = df.sort_index().copy()
+    expected_dates = pd.date_range(
+    start=df.index.min(),
+    end=df.index.max(),
+    freq="D",
+)
+
+    if not df.index.equals(expected_dates):
+        raise ValueError(
+            "Data harga memiliki tanggal yang hilang. "
+            "Diferencing harian membutuhkan tanggal yang berurutan."
+        )
+
+    if df.index.has_duplicates:
+        raise ValueError("Index tanggal duplikat ditemukan.")
+
+    required_cols = list(feature_cols)
 
     missing_cols = [
         col for col in required_cols
@@ -368,26 +375,20 @@ def prepare(df, window, feature_cols):
             f"Kolom fitur tidak ditemukan: {missing_cols}"
         )
 
-    # Pastikan semua fitur numerik dan lengkap.
     if df[required_cols].isna().any().any():
         raise ValueError(
             "Data masih memiliki nilai kosong. "
             "Periksa preprocessing sebelum prepare()."
         )
 
-    X_values = df[feature_cols].to_numpy(
-        dtype=np.float64
-    )
+    if (df["harga"] <= 0).any():
+        raise ValueError("Harga harus lebih besar dari nol.")
 
-    y_values = df["harga"].to_numpy(
-        dtype=np.float64
-    ).reshape(-1, 1)
+    X_values = df[feature_cols].to_numpy(dtype=np.float64)
+    prices = df["harga"].to_numpy(dtype=np.float64)
 
     n = len(df)
 
-    # --------------------------------------------------------
-    # Tentukan batas split berdasarkan jumlah baris
-    # --------------------------------------------------------
     i_tr = int(n * SPLIT[0])
     i_va = int(n * (SPLIT[0] + SPLIT[1]))
 
@@ -401,59 +402,45 @@ def prepare(df, window, feature_cols):
             "dan pembagian train/validation/test."
         )
 
-    # --------------------------------------------------------
-    # Fit scaler hanya menggunakan data train
-    # --------------------------------------------------------
-    x_scaler = MinMaxScaler()
+    # Target harga atau selisih harga.
+    if target_mode == "price":
+        y_values = prices.reshape(-1, 1)
+        y_fit = y_values[:i_tr]
 
-    x_scaler.fit(
-        X_values[:i_tr]
-    )
+    else:
+        # delta[t] = harga[t] - harga[t-1].
+        # Nilai indeks pertama tidak mempunyai selisih
+        # historis sehingga tidak digunakan untuk fitting.
+        delta = np.zeros(n, dtype=np.float64)
+        delta[1:] = prices[1:] - prices[:-1]
+
+        y_values = delta.reshape(-1, 1)
+        y_fit = y_values[1:i_tr]
+
+    # Fit scaler hanya pada bagian train.
+    x_scaler = MinMaxScaler()
+    x_scaler.fit(X_values[:i_tr])
 
     y_scaler = MinMaxScaler()
+    y_scaler.fit(y_fit)
 
-    y_scaler.fit(
-        y_values[:i_tr]
-    )
+    X_scaled = x_scaler.transform(X_values)
+    y_scaled = y_scaler.transform(y_values).ravel()
 
-    # Transform seluruh data menggunakan scaler train.
-    X_scaled = x_scaler.transform(
-        X_values
-    )
-
-    y_scaled = y_scaler.transform(
-        y_values
-    ).ravel()
-
-    # --------------------------------------------------------
-    # Buat window
-    # --------------------------------------------------------
     X_all, y_all, idx = make_windows(
         X_scaled,
         y_scaled,
         window,
     )
 
-    # --------------------------------------------------------
-    # Bagi berdasarkan tanggal target
-    # --------------------------------------------------------
+    # Pembagian dilakukan berdasarkan tanggal target.
     train_mask = idx < i_tr
-
-    val_mask = (
-        (idx >= i_tr)
-        & (idx < i_va)
-    )
-
+    val_mask = (idx >= i_tr) & (idx < i_va)
     test_mask = idx >= i_va
 
-    X_tr = X_all[train_mask]
-    y_tr = y_all[train_mask]
-
-    X_va = X_all[val_mask]
-    y_va = y_all[val_mask]
-
-    X_te = X_all[test_mask]
-    y_te = y_all[test_mask]
+    X_tr, y_tr = X_all[train_mask], y_all[train_mask]
+    X_va, y_va = X_all[val_mask], y_all[val_mask]
+    X_te, y_te = X_all[test_mask], y_all[test_mask]
 
     if (
         len(X_tr) == 0
@@ -465,25 +452,20 @@ def prepare(df, window, feature_cols):
             "atau test tidak memiliki sampel."
         )
 
-    # --------------------------------------------------------
-    # Informasi split
-    # --------------------------------------------------------
+    # Informasi harga untuk rekonstruksi dan evaluasi.
+    test_target_indices = idx[test_mask]
+
+    actual_prices_test = prices[test_target_indices]
+    previous_prices_test = prices[test_target_indices - 1]
+
     print("\n=== PEMBAGIAN DATA ===")
     print(f"Total baris data   : {n}")
+    print(f"Target mode        : {target_mode}")
     print(f"Window size        : {window}")
     print(f"Jumlah fitur       : {len(feature_cols)}")
-    print(
-        f"Train              : {len(X_tr)} sampel "
-        f"({len(X_tr) / len(X_all) * 100:.2f}%)"
-    )
-    print(
-        f"Validation         : {len(X_va)} sampel "
-        f"({len(X_va) / len(X_all) * 100:.2f}%)"
-    )
-    print(
-        f"Test               : {len(X_te)} sampel "
-        f"({len(X_te) / len(X_all) * 100:.2f}%)"
-    )
+    print(f"Train              : {len(X_tr)} sampel")
+    print(f"Validation         : {len(X_va)} sampel")
+    print(f"Test               : {len(X_te)} sampel")
     print(f"Bentuk X_train     : {X_tr.shape}")
     print(f"Bentuk X_val       : {X_va.shape}")
     print(f"Bentuk X_test      : {X_te.shape}")
@@ -501,6 +483,9 @@ def prepare(df, window, feature_cols):
         "X_te": X_te,
         "y_te": y_te,
 
+        "y_true_price_te": actual_prices_test,
+        "previous_price_te": previous_prices_test,
+
         "n_total": n,
         "n_train": len(X_tr),
         "n_val": len(X_va),
@@ -511,4 +496,5 @@ def prepare(df, window, feature_cols):
 
         "split_train_end": i_tr,
         "split_val_end": i_va,
+        "target_mode": target_mode,
     }

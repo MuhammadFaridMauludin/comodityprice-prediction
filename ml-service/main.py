@@ -57,6 +57,7 @@ class TrainRequest(BaseModel):
     model: Literal["LSTM", "BiLSTM", "GRU"]
     arsitektur: Literal["A", "B"]
     strategi: Literal["ST-1", "ST-2", "ST-3"]
+    target_mode: Literal["price", "difference"] = "price"
 
 
 def ambil_json_hasil(output: str):
@@ -109,6 +110,7 @@ def jalankan_training(params: dict):
             "--model", params["model"],
             "--arsitektur", params["arsitektur"],
             "--strategi", params["strategi"],
+            "--target-mode", params["target_mode"],
         ]
 
         proses = subprocess.run(
@@ -263,6 +265,7 @@ def mulai_training(
         "model": request.model,
         "arsitektur": request.arsitektur,
         "strategi": request.strategi,
+        "target_mode": request.target_mode,
     }
 
     state_training.update({

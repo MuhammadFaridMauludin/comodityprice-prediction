@@ -49,6 +49,8 @@ class ModelController extends Controller
         'model' => ['required', Rule::in(['LSTM', 'BiLSTM', 'GRU'])],
         'arsitektur' => ['required', Rule::in(['A', 'B'])],
         'strategi' => ['required', Rule::in(['ST-1', 'ST-2', 'ST-3'])],
+        'target_mode' => ['required', Rule::in(['price', 'difference']),
+        ],
     ]);
 
     try {

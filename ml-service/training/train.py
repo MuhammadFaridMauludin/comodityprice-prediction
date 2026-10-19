@@ -48,10 +48,11 @@ def run(args):
     )
     print("PROGRESS:SPLIT", flush=True)
     d = prepare(
-        df,
-        FIXED["window_size"],
-        feature_cols,
-    )
+    df,
+    FIXED["window_size"],
+    feature_cols,
+    target_mode=args.target_mode,
+)
 
     units = ARCHITECTURES[args.arsitektur]
     st = STRATEGIES[args.strategi]
@@ -61,7 +62,7 @@ def run(args):
         args.arsitektur,
         args.strategi,
     )
-    
+
     model = build_model(
         args.model,
         units,
@@ -94,22 +95,35 @@ def run(args):
 
     durasi = time.time() - t0
     print("PROGRESS:EVALUASI", flush=True)
-    # Prediksi dan evaluasi pada skala harga asli.
-    y_true = d["y_scaler"].inverse_transform(
-        d["y_te"].reshape(-1, 1)
+
+    # Prediksi target pada skala yang digunakan saat training.
+    pred_scaled = model.predict(
+        d["X_te"],
+        verbose=0,
+    ).reshape(-1, 1)
+
+    # Kembalikan prediksi ke skala asli target.
+    pred_target = d["y_scaler"].inverse_transform(
+        pred_scaled
     ).ravel()
 
-    y_pred = d["y_scaler"].inverse_transform(
-        model.predict(d["X_te"], verbose=0)
-    ).ravel()
+    # Harga aktual dan harga terakhir sebelum target.
+    y_true = d["y_true_price_te"]
+    y_naive = d["previous_price_te"]
 
-    # Baseline: harga terakhir pada window.
-    y_naive = d["y_scaler"].inverse_transform(
-        d["X_te"][:, -1, 0].reshape(-1, 1)
-    ).ravel()
+    if args.target_mode == "difference":
+        # Target model adalah perubahan harga.
+        # Rekonstruksi harga untuk evaluasi.
+        y_pred = y_naive + pred_target
+    else:
+        # Target model langsung berupa harga.
+        y_pred = pred_target
 
     SAVE_DIR.mkdir(parents=True, exist_ok=True)
-    stem = f"{kode}_k{args.komoditas}_w{args.wilayah}"
+    stem = (
+        f"{kode}_k{args.komoditas}_w{args.wilayah}"
+        f"_target-{args.target_mode}"
+    )
 
     model.save(SAVE_DIR / f"{stem}.keras")
     joblib.dump(
@@ -148,6 +162,7 @@ def run(args):
         },
         "metrik": metrics(y_true, y_pred),
         "metrik_naive": metrics(y_true, y_naive),
+        "target_mode": args.target_mode,
     }
 
     print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -174,4 +189,10 @@ if __name__ == "__main__":
     )
     p.add_argument("--seed", type=int, default=42)
 
+    p.add_argument(
+        "--target-mode",
+        choices=["price", "difference"],
+        default="price",
+        help="Target prediksi: harga langsung atau selisih harga.",
+    )
     run(p.parse_args())
