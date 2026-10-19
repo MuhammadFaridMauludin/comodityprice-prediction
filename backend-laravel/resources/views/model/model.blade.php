@@ -54,9 +54,9 @@
                                 <form id="train-form" class="border rounded-3 p-3 h-100" novalidate>
                                     <div class="mb-3">
                                         <label class="form-label">Komoditas</label>
-                                        <select class="form-select" name="komoditas">
-                                            @foreach ($commodities as $c)
-                                                <option value="{{ $c }}">{{ $c }}</option>
+                                        <select class="form-select" name="komoditas" required>
+                                            @foreach ($commodities as $id => $nama)
+                                                <option value="{{ $id }}">{{ $nama }}</option>
                                             @endforeach
                                         </select>
                                     </div>
@@ -72,18 +72,38 @@
                                     </div>
 
                                     <div class="mb-3">
+                                        @csrf
                                         <label class="form-label">Model</label>
-                                        <div class="d-flex flex-wrap gap-3">
-                                            @foreach ($models as $m)
-                                                <label class="form-check m-0">
-                                                    <input class="form-check-input" type="checkbox" name="models[]"
-                                                        value="{{ $m }}" {{ $m === 'LSTM' ? 'checked' : '' }}>
-                                                    <span class="form-check-label">{{ $m }}</span>
-                                                </label>
-                                            @endforeach
-                                        </div>
+                                        <select class="form-select" name="model" required>
+                                            <option value="LSTM">LSTM</option>
+                                            <option value="BiLSTM">BiLSTM</option>
+                                            <option value="GRU">GRU</option>
+                                        </select>
                                     </div>
 
+                                    <div class="mb-3">
+                                        <label class="form-label">Arsitektur</label>
+                                        <select class="form-select" name="arsitektur" required>
+                                            <option value="A">A — 1 lapisan (128 unit)</option>
+                                            <option value="B">B — 2 lapisan (64, 32 unit)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Strategi Training</label>
+                                        <select class="form-select" name="strategi" required>
+                                            <option value="ST-1">ST-1 — 50 epoch</option>
+                                            <option value="ST-2">ST-2 — 100 epoch</option>
+                                            <option value="ST-3">ST-3 — 100 epoch, patience 5</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Wilayah Target Harga</label>
+                                        <select class="form-select" name="wilayah" required>
+                                            <option value="37">Kota Surabaya</option>
+                                        </select>
+                                    </div>
                                     <button type="submit" id="btn-train" class="btn btn-primary w-100">
                                         <i class="ti ti-player-play"></i> Training
                                     </button>
@@ -165,123 +185,223 @@
 @push('myscript')
     <script>
         (function() {
-            var form = document.getElementById('train-form');
+            const form = document.getElementById('train-form');
             if (!form) return;
 
-            var steps = Array.prototype.slice.call(document.querySelectorAll('#train-steps li'));
-            var result = document.getElementById('train-result');
-            var button = document.getElementById('btn-train');
+            const result = document.getElementById('train-result');
+            const button = document.getElementById('btn-train');
+            const steps = Array.from(
+                document.querySelectorAll('#train-steps li')
+            );
 
-            var ICON = {
-                wait: '<i class="ti ti-circle"></i>',
-                run: '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>',
-                done: '<i class="ti ti-circle-check text-green"></i>'
-            };
+            const startUrl = @json(route('model.train'));
+            const statusUrl = @json(route('model.train.status'));
+            const csrf = form.querySelector('[name="_token"]').value;
 
-            // Metrik contoh (simulasi). Ganti dengan respons server saat training sungguhan.
-            var SAMPLE = {
-                LSTM: {
-                    rmse: 223.4,
-                    mae: 165.5,
-                    mape: 2.63
-                },
-                BiLSTM: {
-                    rmse: 210.2,
-                    mae: 155.7,
-                    mape: 2.52
-                },
-                GRU: {
-                    rmse: 195.6,
-                    mae: 144.9,
-                    mape: 2.33
-                }
-            };
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-            function fmt(n, d) {
-                return n.toLocaleString('id-ID', {
-                    minimumFractionDigits: d,
-                    maximumFractionDigits: d
+            function formatNumber(value, digits = 2) {
+                return Number(value).toLocaleString('id-ID', {
+                    minimumFractionDigits: digits,
+                    maximumFractionDigits: digits
                 });
             }
 
-            function setStep(i, state) {
-                steps[i].querySelector('.step-icon').innerHTML = ICON[state];
-                steps[i].classList.toggle('text-secondary', state === 'wait');
-                steps[i].classList.toggle('fw-bold', state === 'run');
-            }
+            function updateTrainingSteps(stageIndex, status) {
+                const ICONS = {
+                    wait: '<i class="ti ti-circle"></i>',
+                    run: '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>',
+                    done: '<i class="ti ti-circle-check text-green"></i>',
+                    error: '<i class="ti ti-alert-circle text-danger"></i>'
+                };
 
-            function showResult(models) {
-                var best = models.reduce(function(a, b) {
-                    return SAMPLE[a].rmse <= SAMPLE[b].rmse ? a : b;
-                });
-                var html = '<table class="table table-sm table-vcenter mb-2"><thead><tr>' +
-                    '<th>Model</th><th class="text-end">RMSE</th><th class="text-end">MAPE</th></tr></thead><tbody>';
-                models.forEach(function(m) {
-                    var s = SAMPLE[m];
-                    html += '<tr class="' + (m === best ? 'table-active' : '') + '"><td class="fw-bold">' + m +
-                        '</td>' +
-                        '<td class="text-end">' + fmt(s.rmse, 1) + '</td>' +
-                        '<td class="text-end">' + fmt(s.mape, 2) + '%</td></tr>';
-                });
-                html += '</tbody></table><div class="small text-secondary">Model terbaik: <b>' + best +
-                    '</b> (RMSE terendah). Ini hasil simulasi dengan data contoh.</div>';
-                result.innerHTML = html;
-            }
+                steps.forEach((step, index) => {
+                    let state = 'wait';
 
-            function run(models) {
-                button.disabled = true;
-                steps.forEach(function(_, i) {
-                    setStep(i, 'wait');
-                });
-                result.innerHTML =
-                    '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div>' +
-                    '<div class="text-secondary small mt-3">Training berjalan...</div></div>';
-
-                var i = 0;
-                (function next() {
-                    if (i > 0) setStep(i - 1, 'done');
-                    if (i >= steps.length) {
-                        showResult(models);
-                        button.disabled = false;
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Training selesai',
-                            text: 'Ini hasil simulasi dengan data contoh.'
-                        });
-                        return;
+                    if (status === 'completed') {
+                        state = 'done';
+                    } else if (status === 'failed' && index === stageIndex) {
+                        state = 'error';
+                    } else if (index < stageIndex) {
+                        state = 'done';
+                    } else if (index === stageIndex) {
+                        state = 'run';
                     }
-                    setStep(i, 'run');
-                    i++;
-                    setTimeout(next, 1000);
-                })();
+
+                    step.querySelector('.step-icon').innerHTML = ICONS[state];
+
+                    step.classList.toggle('text-secondary', state === 'wait');
+                    step.classList.toggle('fw-bold', state === 'run');
+                });
             }
 
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
+            function showError(message) {
+                result.replaceChildren();
 
-                var models = Array.prototype.slice.call(form.querySelectorAll('input[name="models[]"]:checked'))
-                    .map(function(c) {
-                        return c.value;
-                    });
+                const box = document.createElement('div');
+                box.className = 'alert alert-danger mb-0';
+                box.textContent = message || 'Training gagal.';
+                result.appendChild(box);
+            }
 
-                if (!models.length) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Pilih minimal satu model'
-                    });
+            function showProgress(message) {
+                result.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary"
+                     role="status"></div>
+                <div class="text-secondary small mt-3"></div>
+            </div>`;
+
+                result.querySelector('.text-secondary').textContent = message;
+            }
+
+            function showResult(data) {
+                const metrics = data.metrik || {};
+                const naive = data.metrik_naive || {};
+
+                result.innerHTML = `
+            <div class="alert alert-success">
+                Training selesai. Hasil berasal dari ML service.
+            </div>
+
+            <div class="small text-secondary mb-3">
+                Skenario: <strong class="scenario"></strong>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-vcenter">
+                    <tbody>
+                        <tr><th>Model</th><td class="model"></td></tr>
+                        <tr><th>Arsitektur</th><td class="architecture"></td></tr>
+                        <tr><th>Strategi</th><td class="strategy"></td></tr>
+                        <tr><th>Epoch aktual</th><td class="epoch"></td></tr>
+                        <tr><th>Parameter model</th><td class="parameters"></td></tr>
+                        <tr><th>RMSE</th><td>${formatNumber(metrics.rmse)}</td></tr>
+                        <tr><th>MAE</th><td>${formatNumber(metrics.mae)}</td></tr>
+                        <tr><th>MAPE</th><td>${formatNumber(metrics.mape)}%</td></tr>
+                        <tr><th>RMSE naive</th><td>${formatNumber(naive.rmse)}</td></tr>
+                        <tr><th>MAE naive</th><td>${formatNumber(naive.mae)}</td></tr>
+                        <tr><th>MAPE naive</th><td>${formatNumber(naive.mape)}%</td></tr>
+                        <tr><th>Durasi</th><td>${formatNumber(data.durasi_detik, 1)} detik</td></tr>
+                    </tbody>
+                </table>
+            </div>`;
+
+                result.querySelector('.scenario').textContent =
+                    data.kode_skenario ?? '-';
+                result.querySelector('.model').textContent = data.model ?? '-';
+                result.querySelector('.architecture').textContent =
+                    data.arsitektur ?? '-';
+                result.querySelector('.strategy').textContent =
+                    data.strategi ?? '-';
+                result.querySelector('.epoch').textContent =
+                    data.epoch_aktual ?? '-';
+                result.querySelector('.parameters').textContent =
+                    Number(data.jumlah_parameter ?? 0).toLocaleString('id-ID');
+            }
+
+            async function fetchJson(url, options = {}) {
+                const response = await fetch(url, options);
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    const validationErrors = payload.errors ?
+                        Object.values(payload.errors).flat().join(' ') :
+                        '';
+
+                    throw new Error(
+                        validationErrors ||
+                        payload.detail ||
+                        payload.message ||
+                        `Request gagal (${response.status}).`
+                    );
+                }
+
+                return payload;
+            }
+
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+
+                if (!form.reportValidity()) return;
+
+                if (form.dari.value > form.sampai.value) {
+                    showError('Tanggal awal tidak boleh melewati tanggal akhir.');
                     return;
                 }
-                if (form.dari.value && form.sampai.value && form.dari.value > form.sampai.value) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Rentang tanggal tidak valid',
-                        text: 'Tanggal awal harus sebelum tanggal akhir.'
-                    });
-                    return;
-                }
 
-                run(models);
+                button.disabled = true;
+
+                // Reset seluruh indikator tahapan.
+                updateTrainingSteps(-1, 'running');
+                showProgress('Mengirim permintaan ke ML service...');
+
+                try {
+                    await fetchJson(startUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrf
+                        },
+                        body: new FormData(form)
+                    });
+
+                    while (true) {
+                        await sleep(2000);
+
+                        const status = await fetchJson(statusUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+
+                        // Perbarui ikon berdasarkan progres dari FastAPI.
+                        updateTrainingSteps(
+                            status.stage_index,
+                            status.status
+                        );
+
+                        if (status.status === 'completed') {
+                            showResult(status.result);
+
+                            if (window.Swal) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Training selesai',
+                                    text: `Skenario ${status.result.kode_skenario} berhasil dijalankan.`
+                                });
+                            }
+
+                            break;
+                        }
+
+                        if (status.status === 'failed') {
+                            throw new Error(
+                                status.error || 'Training gagal.'
+                            );
+                        }
+
+                        showProgress(
+                            'Training berjalan di ML service. Menunggu hasil...'
+                        );
+                    }
+                } catch (error) {
+                    updateTrainingSteps(-1, 'failed');
+                    showError(error.message);
+
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Training gagal',
+                            text: error.message
+                        });
+                    }
+                } finally {
+                    button.disabled = false;
+                }
             });
+
         })();
     </script>
 @endpush
