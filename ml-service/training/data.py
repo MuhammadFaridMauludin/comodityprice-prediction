@@ -1,4 +1,3 @@
-
 import mysql.connector
 import numpy as np
 import pandas as pd
@@ -9,7 +8,7 @@ from calendar_features import calendar_features
 
 
 # ============================================================
-# KONFIGURASI FITUR
+# 1. KONFIGURASI FITUR
 # ============================================================
 
 WEATHER_COLS = [
@@ -25,34 +24,30 @@ EVENT_COLS = [
     "is_nataru",
 ]
 
-# Total 8 fitur:
-# 1 harga + 3 cuaca + 4 kalender
 FEATURE_COLS = ["harga"] + WEATHER_COLS + EVENT_COLS
 
 
 # ============================================================
-# 1. LOAD DATA HARGA DAN CUACA
+# 2. LOAD DATA HARGA DAN CUACA
 # ============================================================
 
 def load_series(id_komoditas, id_wilayah, dari, sampai):
     """
-    Mengambil data harga komoditas untuk satu wilayah
-    dan data cuaca agregat harian dari database.
+    Mengambil data harga untuk satu komoditas dan wilayah,
+    lalu menggabungkannya dengan data cuaca agregat harian
+    serta fitur kalender.
 
     Returns
     -------
-    df : DataFrame
-        Data harian dengan fitur harga, cuaca, dan kalender.
+    df : pandas.DataFrame
+        Data harian dengan index tanggal.
     feature_cols : list
-        Daftar fitur input model.
+        Delapan fitur input model.
     """
 
     conn = mysql.connector.connect(**DB)
 
     try:
-        # ----------------------------------------------------
-        # Ambil harga komoditas untuk wilayah target
-        # ----------------------------------------------------
         harga = pd.read_sql(
             """
             SELECT
@@ -67,17 +62,9 @@ def load_series(id_komoditas, id_wilayah, dari, sampai):
             ORDER BY tanggal
             """,
             conn,
-            params=(
-                id_komoditas,
-                id_wilayah,
-                dari,
-                sampai,
-            ),
+            params=(id_komoditas, id_wilayah, dari, sampai),
         )
 
-        # ----------------------------------------------------
-        # Ambil data cuaca agregat harian
-        # ----------------------------------------------------
         cuaca = pd.read_sql(
             """
             SELECT
@@ -97,228 +84,128 @@ def load_series(id_komoditas, id_wilayah, dari, sampai):
     finally:
         conn.close()
 
-    # --------------------------------------------------------
-    # Validasi data
-    # --------------------------------------------------------
     if harga.empty:
         raise ValueError(
-            "Data harga kosong. Periksa id_komoditas, "
-            "id_wilayah, dan rentang tanggal."
+            "Data harga kosong. Periksa ID komoditas, "
+            "wilayah, dan rentang tanggal."
         )
 
     if cuaca.empty:
-        raise ValueError(
-            "Data cuacaharian kosong untuk periode tersebut."
-        )
+        raise ValueError("Data cuaca agregat harian kosong.")
 
-    # --------------------------------------------------------
-    # Normalisasi format tanggal
-    # --------------------------------------------------------
-    harga["tanggal"] = pd.to_datetime(harga["tanggal"])
-    cuaca["tanggal"] = pd.to_datetime(cuaca["tanggal"])
-
-    harga["tanggal"] = harga["tanggal"].dt.normalize()
-    cuaca["tanggal"] = cuaca["tanggal"].dt.normalize()
+    # Normalisasi tanggal.
+    harga["tanggal"] = pd.to_datetime(harga["tanggal"]).dt.normalize()
+    cuaca["tanggal"] = pd.to_datetime(cuaca["tanggal"]).dt.normalize()
 
     if harga["tanggal"].duplicated().any():
-        raise ValueError(
-            "Terdapat tanggal harga duplikat setelah agregasi."
-        )
+        raise ValueError("Tanggal harga duplikat ditemukan.")
 
     if cuaca["tanggal"].duplicated().any():
-        raise ValueError(
-            "Terdapat tanggal duplikat pada data cuacaharian."
-        )
+        raise ValueError("Tanggal cuaca duplikat ditemukan.")
 
-    # --------------------------------------------------------
-    # Buat kalender harian lengkap
-    # --------------------------------------------------------
+    # Buat kalender harian lengkap.
     dates = pd.date_range(
-        start=pd.Timestamp(dari),
-        end=pd.Timestamp(sampai),
+        start=pd.Timestamp(dari).normalize(),
+        end=pd.Timestamp(sampai).normalize(),
         freq="D",
     )
 
-    dates = dates.normalize()
+    df = pd.DataFrame({"tanggal": dates})
 
-    df = pd.DataFrame({
-        "tanggal": dates,
-    })
+    # Gabungkan harga dan cuaca.
+    df = df.merge(harga, on="tanggal", how="left", validate="one_to_one")
 
-    # --------------------------------------------------------
-    # Gabungkan harga berdasarkan tanggal
-    # --------------------------------------------------------
     df = df.merge(
-        harga,
+        cuaca[["tanggal", "suhu", "kelembapan", "curah_hujan", "jumlah_titik"]],
         on="tanggal",
         how="left",
         validate="one_to_one",
     )
 
-    # --------------------------------------------------------
-    # Gabungkan cuaca berdasarkan tanggal
-    # --------------------------------------------------------
-    df = df.merge(
-        cuaca[
-            [
-                "tanggal",
-                "suhu",
-                "kelembapan",
-                "curah_hujan",
-                "jumlah_titik",
-            ]
-        ],
-        on="tanggal",
-        how="left",
-        validate="one_to_one",
-    )
-
-    # --------------------------------------------------------
-    # Validasi dan isi data cuaca yang hilang
-    # --------------------------------------------------------
-    # Forward fill hanya menggunakan pengamatan sebelumnya.
-    # Nilai sebelum pengamatan cuaca pertama tidak diisi
-    # menggunakan data masa depan.
+    # Forward fill hanya untuk cuaca, menggunakan pengamatan sebelumnya.
     df[WEATHER_COLS] = df[WEATHER_COLS].ffill()
 
-    # Jangan otomatis mengisi harga yang hilang.
-    # Harga yang tidak tersedia harus ditangani secara eksplisit.
-    df = df.dropna(
-        subset=["harga"] + WEATHER_COLS
-    ).copy()
+    # Jangan mengisi harga yang hilang dengan data masa depan.
+    df = df.dropna(subset=["harga"] + WEATHER_COLS).copy()
 
-    if df.empty:
-        raise ValueError(
-            "Tidak ada baris valid setelah penggabungan harga "
-            "dan cuaca."
-        )
-
-    # --------------------------------------------------------
-    # Validasi nilai numerik
-    # --------------------------------------------------------
     numeric_cols = ["harga"] + WEATHER_COLS
 
-    df[numeric_cols] = df[numeric_cols].apply(
-        pd.to_numeric,
-        errors="coerce",
-    )
-
-    df = df.replace(
-        [np.inf, -np.inf],
-        np.nan,
-    )
-
-    df = df.dropna(
-        subset=numeric_cols
-    ).copy()
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(subset=numeric_cols).copy()
 
     if df.empty:
-        raise ValueError(
-            "Tidak ada data numerik valid untuk pelatihan."
-        )
+        raise ValueError("Tidak ada data valid setelah preprocessing.")
 
     if (df["harga"] <= 0).any():
-        raise ValueError(
-            "Harga harus lebih besar dari nol."
-        )
+        raise ValueError("Harga harus lebih besar dari nol.")
 
-    # --------------------------------------------------------
-    # Buat fitur kalender
-    # --------------------------------------------------------
-    # Fungsi calendar_features() harus menghasilkan kolom:
-    # is_ramadan, pre_eid, is_adha, is_nataru.
+    # Buat fitur kalender.
     events = calendar_features(df["tanggal"])
 
-    # Validasi nama kolom sebelum assignment
-    missing_event_cols = [
-        col for col in EVENT_COLS
-        if col not in events.columns
-    ]
+    missing_events = [c for c in EVENT_COLS if c not in events.columns]
 
-    if missing_event_cols:
-        raise ValueError(
-            "Kolom kalender tidak ditemukan: "
-            f"{missing_event_cols}. "
-            f"Kolom yang tersedia: {events.columns.tolist()}. "
-            "Periksa calendar_features.py."
-        )
+    if missing_events:
+        raise ValueError(f"Fitur kalender tidak ditemukan: {missing_events}")
 
-    # Assignment berdasarkan urutan baris, bukan label index.
-    # Ini menghindari KeyError atau ketidakcocokan index.
     if len(events) != len(df):
         raise ValueError(
-            "Jumlah baris fitur kalender tidak sama "
-            "dengan jumlah baris data."
+            "Jumlah baris fitur kalender tidak sesuai "
+            "dengan jumlah baris dataset."
         )
 
     events = events.reset_index(drop=True)
     df = df.reset_index(drop=True)
 
-    df[EVENT_COLS] = events[EVENT_COLS].to_numpy(
-        dtype=np.int8
-    )
+    df[EVENT_COLS] = events[EVENT_COLS].to_numpy(dtype=np.int8)
 
-    # --------------------------------------------------------
-    # Pemeriksaan akhir
-    # --------------------------------------------------------
     df = df.sort_values("tanggal").reset_index(drop=True)
 
     if df[FEATURE_COLS].isna().any().any():
-        raise ValueError(
-            "Masih ditemukan nilai kosong pada fitur model."
-        )
+        raise ValueError("Masih ada nilai kosong pada fitur model.")
 
-    # Tanggal menjadi index untuk analisis time series.
     df = df.set_index("tanggal").sort_index()
 
     print("\n=== DATASET MULTIVARIATE ===")
-    print(f"Jumlah baris       : {len(df)}")
-    print(f"Jumlah fitur       : {len(FEATURE_COLS)}")
-    print(f"Fitur              : {FEATURE_COLS}")
-    print(f"Tanggal awal       : {df.index.min().date()}")
-    print(f"Tanggal akhir      : {df.index.max().date()}")
-    print(f"Harga minimum      : {df['harga'].min():,.2f}")
-    print(f"Harga maksimum     : {df['harga'].max():,.2f}")
-    print(
-        f"Cuaca tersedia     : "
-        f"{df[WEATHER_COLS].notna().all(axis=1).sum()} baris"
-    )
+    print(f"Jumlah baris  : {len(df)}")
+    print(f"Jumlah fitur  : {len(FEATURE_COLS)}")
+    print(f"Fitur         : {FEATURE_COLS}")
+    print(f"Tanggal awal  : {df.index.min().date()}")
+    print(f"Tanggal akhir : {df.index.max().date()}")
+    print(f"Harga minimum : {df['harga'].min():,.2f}")
+    print(f"Harga maksimum: {df['harga'].max():,.2f}")
 
     return df, FEATURE_COLS
 
 
 # ============================================================
-# 2. MEMBUAT WINDOW TIME SERIES
+# 3. MEMBUAT WINDOW TIME SERIES (MULTI-STEP)
 # ============================================================
 
-def make_windows(X, y, window):
+def make_windows(X, y, window, horizon=1):
     """
-    Membuat window multivariate.
+    Membuat sampel sequence untuk prediksi `horizon` hari ke depan.
 
-    Input:
-        X: (jumlah_hari, jumlah_fitur)
-        y: (jumlah_hari,)
-        window: jumlah timestep historis
+    X: (jumlah_hari, jumlah_fitur)
+    y: (jumlah_hari,)
+
+    Untuk indeks i:
+        input  = X[i - window : i]        (window hari terakhir)
+        target = y[i : i + horizon]       (horizon hari berikutnya)
 
     Output:
-        X: (jumlah_sampel, window, jumlah_fitur)
-        y: (jumlah_sampel,)
-        indices: indeks tanggal target.
+    X_out: (jumlah_sampel, window, jumlah_fitur)
+    y_out: (jumlah_sampel, horizon)
+    indices: indeks hari target PERTAMA (i).
     """
 
     X_out = []
     y_out = []
     indices = []
 
-    for i in range(window, len(X)):
-        X_out.append(
-            X[i - window:i]
-        )
-
-        y_out.append(
-            y[i]
-        )
-
+    for i in range(window, len(X) - horizon + 1):
+        X_out.append(X[i - window:i])
+        y_out.append(y[i:i + horizon])
         indices.append(i)
 
     return (
@@ -328,58 +215,77 @@ def make_windows(X, y, window):
     )
 
 
+def stack_prices(prices, idx, horizon):
+    """
+    Harga aktual (N, horizon) dan baseline naive (N, horizon).
+    Baseline naive: harga terakhir yang diketahui diulang
+    sepanjang horizon.
+    """
+    actual = np.stack([prices[i:i + horizon] for i in idx])
+    last_known = prices[idx - 1]
+    naive = np.repeat(last_known[:, None], horizon, axis=1)
+    return actual, naive, last_known
+
+
 # ============================================================
-# 3. PREPROCESSING DAN SPLIT KRONOLOGIS
+# 4. PREPROCESSING DAN SPLIT KRONOLOGIS
 # ============================================================
 
-def prepare(df, window, feature_cols, target_mode="price"):
+def prepare(
+    df,
+    window,
+    feature_cols,
+    target_mode="price",
+    horizon=1,
+):
     """
-    Menyiapkan data train, validation, dan test secara kronologis.
+    Menyiapkan data train, validation, dan test
+    berdasarkan urutan waktu.
 
     target_mode:
-        price      : prediksi harga hari berikutnya.
-        difference : prediksi selisih harga hari berikutnya.
+        price      : prediksi harga `horizon` hari ke depan.
+        difference : prediksi perubahan harga harian
+                     sepanjang `horizon` hari.
 
-    Evaluasi akhir tetap menggunakan harga dalam skala rupiah.
+    horizon:
+        jumlah hari yang diprediksi sekaligus (1, 7, 30, ...).
+
+    Evaluasi dilakukan dalam skala harga asli.
     """
+
     if target_mode not in ("price", "difference"):
-        raise ValueError(
-            "target_mode harus 'price' atau 'difference'."
-        )
+        raise ValueError("target_mode harus 'price' atau 'difference'.")
+
+    if not isinstance(window, int) or window < 1:
+        raise ValueError("window harus berupa integer positif.")
+
+    if not isinstance(horizon, int) or horizon < 1:
+        raise ValueError("horizon harus berupa integer positif.")
 
     df = df.sort_index().copy()
+
     expected_dates = pd.date_range(
-    start=df.index.min(),
-    end=df.index.max(),
-    freq="D",
-)
+        start=df.index.min(),
+        end=df.index.max(),
+        freq="D",
+    )
 
     if not df.index.equals(expected_dates):
         raise ValueError(
-            "Data harga memiliki tanggal yang hilang. "
-            "Diferencing harian membutuhkan tanggal yang berurutan."
+            "Tanggal dataset tidak berurutan harian. "
+            "Periksa data harga yang hilang sebelum training."
         )
 
     if df.index.has_duplicates:
         raise ValueError("Index tanggal duplikat ditemukan.")
 
-    required_cols = list(feature_cols)
-
-    missing_cols = [
-        col for col in required_cols
-        if col not in df.columns
-    ]
+    missing_cols = [c for c in feature_cols if c not in df.columns]
 
     if missing_cols:
-        raise ValueError(
-            f"Kolom fitur tidak ditemukan: {missing_cols}"
-        )
+        raise ValueError(f"Kolom fitur tidak ditemukan: {missing_cols}")
 
-    if df[required_cols].isna().any().any():
-        raise ValueError(
-            "Data masih memiliki nilai kosong. "
-            "Periksa preprocessing sebelum prepare()."
-        )
+    if df[feature_cols].isna().any().any():
+        raise ValueError("Data masih memiliki nilai kosong.")
 
     if (df["harga"] <= 0).any():
         raise ValueError("Harga harus lebih besar dari nol.")
@@ -389,35 +295,30 @@ def prepare(df, window, feature_cols, target_mode="price"):
 
     n = len(df)
 
+    # Batas split berdasarkan jumlah baris kronologis.
     i_tr = int(n * SPLIT[0])
     i_va = int(n * (SPLIT[0] + SPLIT[1]))
 
-    if (
-        i_tr <= window
-        or i_va <= i_tr
-        or n <= i_va
-    ):
+    if i_tr <= window or i_va <= i_tr or n <= i_va:
         raise ValueError(
-            "Jumlah data tidak cukup untuk window "
-            "dan pembagian train/validation/test."
+            "Data tidak cukup untuk window dan split "
+            "train/validation/test."
         )
 
-    # Target harga atau selisih harga.
+    # Tentukan target.
     if target_mode == "price":
         y_values = prices.reshape(-1, 1)
         y_fit = y_values[:i_tr]
 
     else:
-        # delta[t] = harga[t] - harga[t-1].
-        # Nilai indeks pertama tidak mempunyai selisih
-        # historis sehingga tidak digunakan untuk fitting.
+        # delta[t] = harga[t] - harga[t-1]
         delta = np.zeros(n, dtype=np.float64)
         delta[1:] = prices[1:] - prices[:-1]
 
         y_values = delta.reshape(-1, 1)
         y_fit = y_values[1:i_tr]
 
-    # Fit scaler hanya pada bagian train.
+    # Fit scaler hanya menggunakan data train.
     x_scaler = MinMaxScaler()
     x_scaler.fit(X_values[:i_tr])
 
@@ -431,44 +332,47 @@ def prepare(df, window, feature_cols, target_mode="price"):
         X_scaled,
         y_scaled,
         window,
+        horizon,
     )
 
-    # Pembagian dilakukan berdasarkan tanggal target.
-    train_mask = idx < i_tr
-    val_mask = (idx >= i_tr) & (idx < i_va)
+    # Pembagian berdasarkan rentang target (i ... i + horizon - 1).
+    # Seluruh target sebuah sampel harus berada di bagian yang sama,
+    # agar target train tidak "menyeberang" ke validation/test.
+    last_target = idx + horizon          # eksklusif
+    train_mask = last_target <= i_tr
+    val_mask = (idx >= i_tr) & (last_target <= i_va)
     test_mask = idx >= i_va
 
     X_tr, y_tr = X_all[train_mask], y_all[train_mask]
     X_va, y_va = X_all[val_mask], y_all[val_mask]
     X_te, y_te = X_all[test_mask], y_all[test_mask]
 
-    if (
-        len(X_tr) == 0
-        or len(X_va) == 0
-        or len(X_te) == 0
-    ):
+    if len(X_tr) == 0 or len(X_va) == 0 or len(X_te) == 0:
         raise ValueError(
-            "Salah satu segmen train, validation, "
-            "atau test tidak memiliki sampel."
+            "Salah satu bagian train, validation, atau "
+            "test tidak memiliki sampel. Kecilkan window/horizon "
+            "atau tambah data."
         )
 
-    # Informasi harga untuk rekonstruksi dan evaluasi.
-    test_target_indices = idx[test_mask]
+    val_idx = idx[val_mask]
+    test_idx = idx[test_mask]
 
-    actual_prices_test = prices[test_target_indices]
-    previous_prices_test = prices[test_target_indices - 1]
+    # Harga aktual (N, horizon), naive (N, horizon),
+    # dan harga terakhir yang diketahui (N,).
+    actual_va, naive_va, last_va = stack_prices(prices, val_idx, horizon)
+    actual_te, naive_te, last_te = stack_prices(prices, test_idx, horizon)
 
     print("\n=== PEMBAGIAN DATA ===")
-    print(f"Total baris data   : {n}")
-    print(f"Target mode        : {target_mode}")
-    print(f"Window size        : {window}")
-    print(f"Jumlah fitur       : {len(feature_cols)}")
-    print(f"Train              : {len(X_tr)} sampel")
-    print(f"Validation         : {len(X_va)} sampel")
-    print(f"Test               : {len(X_te)} sampel")
-    print(f"Bentuk X_train     : {X_tr.shape}")
-    print(f"Bentuk X_val       : {X_va.shape}")
-    print(f"Bentuk X_test      : {X_te.shape}")
+    print(f"Target mode    : {target_mode}")
+    print(f"Window size    : {window}")
+    print(f"Horizon        : {horizon}")
+    print(f"Total baris    : {n}")
+    print(f"Train          : {len(X_tr)} sampel")
+    print(f"Validation     : {len(X_va)} sampel")
+    print(f"Test           : {len(X_te)} sampel")
+    print(f"Bentuk X_train : {X_tr.shape}")
+    print(f"Bentuk y_train : {y_tr.shape}")
+    print(f"Bentuk X_test  : {X_te.shape}")
 
     return {
         "x_scaler": x_scaler,
@@ -483,8 +387,13 @@ def prepare(df, window, feature_cols, target_mode="price"):
         "X_te": X_te,
         "y_te": y_te,
 
-        "y_true_price_te": actual_prices_test,
-        "previous_price_te": previous_prices_test,
+        "y_true_price_va": actual_va,
+        "naive_price_va": naive_va,
+        "last_price_va": last_va,
+
+        "y_true_price_te": actual_te,
+        "naive_price_te": naive_te,
+        "last_price_te": last_te,
 
         "n_total": n,
         "n_train": len(X_tr),
@@ -497,4 +406,6 @@ def prepare(df, window, feature_cols, target_mode="price"):
         "split_train_end": i_tr,
         "split_val_end": i_va,
         "target_mode": target_mode,
+        "horizon": horizon,
+        "window": window,
     }
