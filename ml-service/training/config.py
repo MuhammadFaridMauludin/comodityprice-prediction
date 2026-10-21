@@ -22,15 +22,15 @@ if not DB["user"] or not DB["database"]:
 # Konfigurasi tetap untuk 18 skenario eksperimen awal.
 FIXED = {
     "window_size": 7,
-    "batch_size": 32,
-    "learning_rate": 0.001,
+    "batch_size":32,
+    "learning_rate": 0.01,
 }
 
 MODELS = ["LSTM", "BiLSTM", "GRU"]
 
 ARCHITECTURES = {
     "A": [128],
-    "B": [64, 32],
+    "B": [100, 100],
 }
 
 STRATEGIES = {
@@ -44,31 +44,31 @@ SAVE_DIR = ROOT / "saved_models"
 
 # Kandidat Grid Search.
 # Ruang pencarian awal dibuat terbatas agar lebih realistis.
-GRID_SEARCH = {
-    # Window size
-    "window_size": [7, 14, 28],
+# GRID_SEARCH = {
+#     # Window size
+#     "window_size": [7, 14, 28],
 
-    # Arsitektur
-    "architectures": {
-        "A": [128],       # 1 lapisan, 128 unit
-        "B": [64, 32],    # 2 lapisan, 64 dan 32 unit
-    },
+#     # Arsitektur
+#     "architectures": {
+#         "A": [128],       # 1 lapisan, 128 unit
+#         "B": [64, 32],    # 2 lapisan, 64 dan 32 unit
+#     },
 
-    # Hyperparameter
-    "learning_rate": [0.01, 0.001],
-    "batch_size": [32],
-    "activation": ["tanh", "relu"],
-    "dropout_rate": [0.0, 0.1, 0.2, 0.3],
+#     # Hyperparameter
+#     "learning_rate": [0.01, 0.001],
+#     "batch_size": [32],
+#     "activation": ["tanh", "relu"],
+#     "dropout_rate": [0.0, 0.1, 0.2, 0.3],
 
-    # Strategi pelatihan
-    "training_strategies": [
-        {
-            "name": "E100",
-            "epochs": 100,
-            "patience": 5,
-        }
-    ],
-}
+#     # Strategi pelatihan
+#     "training_strategies": [
+#         {
+#             "name": "E100",
+#             "epochs": 100,
+#             "patience": 5,
+#         }
+#     ],
+# }
 
 def scenario_code(model, arch, strategy):
     """Mempertahankan penomoran S01-S18 eksperimen awal."""
