@@ -7,16 +7,14 @@ def build_model(
     units,
     window,
     n_features=8,
-    lr=0.001,
-    dropout_rate=0.0,
-    activation="tanh",
+    lr=0.01,
+    dropout_rate=0.3,
+    horizon=1,
 ):
-    if kind not in ("LSTM", "BiLSTM", "GRU"):
-        raise ValueError(f"Model tidak dikenal: {kind}")
-
-    if activation not in ("tanh", "relu"):
-        raise ValueError("Aktivasi harus tanh atau relu.")
-
+    """
+    horizon: jumlah hari yang diprediksi sekaligus.
+    Output model berbentuk (batch, horizon).
+    """
     cell = layers.GRU if kind == "GRU" else layers.LSTM
 
     model = models.Sequential([
@@ -24,26 +22,24 @@ def build_model(
     ])
 
     for i, u in enumerate(units):
-        recurrent_layer = cell(
-            units=u,
-            activation=activation,
+        layer = cell(
+            u,
             return_sequences=(i < len(units) - 1),
         )
 
         if kind == "BiLSTM":
-            model.add(layers.Bidirectional(recurrent_layer))
+            model.add(layers.Bidirectional(layer))
         else:
-            model.add(recurrent_layer)
+            model.add(layer)
 
         if dropout_rate > 0:
             model.add(layers.Dropout(dropout_rate))
 
-    model.add(layers.Dense(1, activation="linear"))
+    # Satu neuron per hari yang diprediksi.
+    model.add(layers.Dense(horizon))
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(
-            learning_rate=lr
-        ),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr),
         loss="mse",
     )
 
