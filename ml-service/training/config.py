@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,18 +18,23 @@ if not DB["user"] or not DB["database"]:
         f"DB_USER / DB_NAME tidak ditemukan. Cek file .env di {ROOT}"
     )
 
-# Konfigurasi tetap untuk 18 skenario eksperimen awal.
+# Nilai awal; window dan learning rate dapat di-override lewat CLI
+# saat tuning (--window, --lr).
 FIXED = {
     "window_size": 7,
-    "batch_size":32,
-    "learning_rate": 0.01,
+    "batch_size": 32,
+    "learning_rate": 0.005,
 }
 
 MODELS = ["LSTM", "BiLSTM", "GRU"]
 
+# Arsitektur "K": mengacu pada hyperparameter Khan dkk. (2024), Tabel 1.
 ARCHITECTURES = {
-    "A": [128],
-    "B": [100, 100],
+    "K": {
+        "LSTM":   {"units": [100, 100], "dropout": 0.3},
+        "BiLSTM": {"units": [100, 100], "dropout": 0.3},
+        "GRU":    {"units": [100],      "dropout": 0.2},
+    },
 }
 
 STRATEGIES = {
@@ -42,37 +46,9 @@ STRATEGIES = {
 SPLIT = (0.70, 0.15, 0.15)
 SAVE_DIR = ROOT / "saved_models"
 
-# Kandidat Grid Search.
-# Ruang pencarian awal dibuat terbatas agar lebih realistis.
-# GRID_SEARCH = {
-#     # Window size
-#     "window_size": [7, 14, 28],
-
-#     # Arsitektur
-#     "architectures": {
-#         "A": [128],       # 1 lapisan, 128 unit
-#         "B": [64, 32],    # 2 lapisan, 64 dan 32 unit
-#     },
-
-#     # Hyperparameter
-#     "learning_rate": [0.01, 0.001],
-#     "batch_size": [32],
-#     "activation": ["tanh", "relu"],
-#     "dropout_rate": [0.0, 0.1, 0.2, 0.3],
-
-#     # Strategi pelatihan
-#     "training_strategies": [
-#         {
-#             "name": "E100",
-#             "epochs": 100,
-#             "patience": 5,
-#         }
-#     ],
-# }
 
 def scenario_code(model, arch, strategy):
-    """Mempertahankan penomoran S01-S18 eksperimen awal."""
-    a = list(ARCHITECTURES).index(arch)
+    """K01-K09 (3 strategi x 3 model); tidak bentrok dengan S01-S18 lama."""
     s = list(STRATEGIES).index(strategy)
     m = MODELS.index(model)
-    return f"S{a * 9 + s * 3 + m + 1:02d}"
+    return f"{arch}{s * 3 + m + 1:02d}"
