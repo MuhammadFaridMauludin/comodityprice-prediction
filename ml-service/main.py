@@ -6,6 +6,7 @@ import json
 from datetime import date
 from pydantic import BaseModel
 from typing import Literal
+import threading
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
@@ -21,12 +22,21 @@ WEATHER_DIR = os.path.join(BASE_DIR, "scraping", "weather")
 
 TRAINING_DIR = os.path.join(BASE_DIR, "training")
 
+STAGES = [
+    "AGREGASI_CUACA",
+    "DATASET",
+    "SPLIT",
+    "TRAINING",
+    "EVALUASI",
+]
+
 state_training = {
     "berjalan": False,
     "status": "idle",
     "request": None,
     "result": None,
     "error": None,
+    "stage_index": -1,
 }
 # nama komoditas -> file script
 SCRIPTS = {
@@ -55,9 +65,9 @@ class TrainRequest(BaseModel):
     dari: date
     sampai: date
     model: Literal["LSTM", "BiLSTM", "GRU"]
-    arsitektur: Literal["A", "B"]
     strategi: Literal["ST-1", "ST-2", "ST-3"]
     target_mode: Literal["price", "difference"] = "price"
+    horizon: int = 30
 
 
 def ambil_json_hasil(output: str):
@@ -108,31 +118,49 @@ def jalankan_training(params: dict):
             "--dari", params["dari"],
             "--sampai", params["sampai"],
             "--model", params["model"],
-            "--arsitektur", params["arsitektur"],
             "--strategi", params["strategi"],
             "--target-mode", params["target_mode"],
+            "--horizon", str(params["horizon"]),
         ]
 
-        proses = subprocess.run(
+        proses = subprocess.Popen(
             command,
             cwd=TRAINING_DIR,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=3600,
+            bufsize=1,
         )
 
-        if proses.returncode != 0:
-            detail = proses.stderr or proses.stdout
+        # Pengganti timeout subprocess.run: matikan proses setelah 3600 detik.
+        timer = threading.Timer(3600, proses.kill)
+        timer.start()
 
+        baris = []
+        try:
+            for line in proses.stdout:
+                baris.append(line)
+                teks = line.strip()
+                if teks.startswith("PROGRESS:"):
+                    nama = teks.split(":", 1)[1]
+                    if nama in STAGES:
+                        state_training["stage_index"] = STAGES.index(nama)
+            proses.wait()
+        finally:
+            timer.cancel()
+
+        output = "".join(baris)
+
+        if proses.returncode != 0:
             state_training.update({
                 "status": "failed",
                 "berjalan": False,
-                "error": detail[-3000:],
+                "error": output[-3000:],
                 "result": None,
             })
             return
 
-        hasil = ambil_json_hasil(proses.stdout)
+        hasil = ambil_json_hasil(output)
 
         if hasil is None:
             state_training.update({
@@ -153,20 +181,13 @@ def jalankan_training(params: dict):
             "result": hasil,
         })
 
-    except subprocess.TimeoutExpired:
-        state_training.update({
-            "status": "failed",
-            "berjalan": False,
-            "error": "Training melewati batas waktu 3600 detik.",
-            "result": None,
-        })
-
     except Exception as exc:
         state_training.update({
             "status": "failed",
             "berjalan": False,
             "error": str(exc),
             "result": None,
+            "stage_index": -1,
         })
 
 # HARGA
@@ -250,6 +271,11 @@ def mulai_training(
             status_code=422,
             detail="Tanggal akhir harus sama atau setelah tanggal awal.",
         )
+    if request.horizon not in (1, 7, 30):
+        raise HTTPException(
+            status_code=422,
+            detail="Horizon harus 1, 7, atau 30.",
+        )
 
     if not os.path.isfile(os.path.join(TRAINING_DIR, "train.py")):
         raise HTTPException(
@@ -263,9 +289,9 @@ def mulai_training(
         "dari": request.dari.isoformat(),
         "sampai": request.sampai.isoformat(),
         "model": request.model,
-        "arsitektur": request.arsitektur,
         "strategi": request.strategi,
         "target_mode": request.target_mode,
+        "horizon": request.horizon,
     }
 
     state_training.update({
