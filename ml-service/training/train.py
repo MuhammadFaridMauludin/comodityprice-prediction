@@ -8,9 +8,11 @@ import tensorflow as tf
 from tensorflow.keras import callbacks
 from pathlib import Path
 from aggregate_weather import aggregate_weather
+
 from config import (
-    ARCHITECTURES,
+    ARCH_LABEL,
     FIXED,
+    MODEL_CONFIG,
     MODELS,
     SAVE_DIR,
     STRATEGIES,
@@ -90,17 +92,19 @@ def run(args):
     # Mengatur seed untuk Python, NumPy, dan TensorFlow.
     tf.keras.utils.set_random_seed(args.seed)
 
+    # Konfigurasi per model (units, dropout, learning rate).
+    cfg = MODEL_CONFIG[args.model]
+    units = cfg["units"]
+    dropout = args.dropout if args.dropout is not None else cfg["dropout"]
+
     window = (
         args.window
         if args.window is not None
         else FIXED["window_size"]
     )
 
-    lr = (
-        args.lr
-        if args.lr is not None
-        else FIXED["learning_rate"]
-    )
+    # Default LR mengikuti model; --lr hanya untuk override saat tuning.
+    lr = args.lr if args.lr is not None else cfg["learning_rate"]
 
     horizon = args.horizon
 
@@ -149,18 +153,10 @@ def run(args):
         horizon=horizon,
     )
 
-    # 5. Mengambil konfigurasi arsitektur dan strategi.
-    cfg = ARCHITECTURES[args.arsitektur][args.model]
-
-    units = cfg["units"]
-    dropout = cfg["dropout"]
+    # 5. Konfigurasi strategi.
     st = STRATEGIES[args.strategi]
 
-    kode = scenario_code(
-        args.model,
-        args.arsitektur,
-        args.strategi,
-    )
+    kode = scenario_code(args.model, args.strategi)
 
     # 6. Membangun model.
     model = build_model(
@@ -246,6 +242,7 @@ def run(args):
         f"_win{window}"
         f"_h{horizon}"
         f"_lr{lr}"
+        f"_dr{dropout}"
         f"_d{args.dense}"
         f"_f{args.fitur}"
         f"_seed{args.seed}"
@@ -271,7 +268,7 @@ def run(args):
         "id_komoditas": args.komoditas,
         "id_wilayah": args.wilayah,
         "model": args.model,
-        "arsitektur": args.arsitektur,
+        "arsitektur": ARCH_LABEL,
         "units": ",".join(map(str, units)),
         "dropout": dropout,
         "dense_units": args.dense,
@@ -343,6 +340,7 @@ def run(args):
 
     return out
 
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
 
@@ -375,9 +373,10 @@ if __name__ == "__main__":
     )
 
     p.add_argument(
-        "--arsitektur",
-        choices=list(ARCHITECTURES),
-        default="K",
+        "--horizon",
+        type=int,
+        default=30,
+        help="Jumlah hari ke depan yang diprediksi sekaligus.",
     )
 
     p.add_argument(
@@ -399,16 +398,6 @@ if __name__ == "__main__":
         help=(
             "Target prediksi: harga langsung "
             "atau selisih harga."
-        ),
-    )
-
-    p.add_argument(
-        "--horizon",
-        type=int,
-        default=1,
-        help=(
-            "Jumlah hari ke depan yang diprediksi "
-            "sekaligus, misalnya 1, 7, atau 30."
         ),
     )
 
@@ -438,8 +427,14 @@ if __name__ == "__main__":
         default=None,
         help=(
             "Learning rate. "
-            "Default mengikuti FIXED['learning_rate']."
+            "Default mengikuti MODEL_CONFIG per model."
         ),
+    )
+    p.add_argument(
+        "--dropout",
+        type=float,
+        default=None,
+        help="Dropout rate. Default mengikuti MODEL_CONFIG per model.",
     )
 
     p.add_argument(
