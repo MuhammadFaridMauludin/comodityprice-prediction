@@ -21,21 +21,19 @@ if not DB["user"] or not DB["database"]:
 # Nilai awal; window dan learning rate dapat di-override lewat CLI
 # saat tuning (--window, --lr).
 FIXED = {
-    "window_size": 7,
+    "window_size": 14,
     "batch_size": 32,
-    "learning_rate": 0.005,
 }
 
 MODELS = ["LSTM", "BiLSTM", "GRU"]
 
 # Arsitektur "K": mengacu pada hyperparameter Khan dkk. (2024), Tabel 1.
-ARCHITECTURES = {
-    "K": {
-        "LSTM":   {"units": [100, 100], "dropout": 0.3},
-        "BiLSTM": {"units": [100, 100], "dropout": 0.3},
-        "GRU":    {"units": [100],      "dropout": 0.2},
-    },
+MODEL_CONFIG = {
+    "LSTM":   {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.0001},
+    "BiLSTM": {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.0001},
+    "GRU":    {"units": [100],      "dropout": 0.3, "learning_rate": 0.0001},
 }
+ARCH_LABEL = "K"
 
 STRATEGIES = {
     "ST-1": {"epochs": 50, "patience": None},
@@ -46,9 +44,8 @@ STRATEGIES = {
 SPLIT = (0.70, 0.15, 0.15)
 SAVE_DIR = ROOT / "saved_models"
 
-
-def scenario_code(model, arch, strategy):
-    """K01-K09 (3 strategi x 3 model); tidak bentrok dengan S01-S18 lama."""
+def scenario_code(model, strategy):
+    """K01-K09 (3 strategi x 3 model)."""
     s = list(STRATEGIES).index(strategy)
     m = MODELS.index(model)
-    return f"{arch}{s * 3 + m + 1:02d}"
+    return f"{ARCH_LABEL}{s * 3 + m + 1:02d}"
