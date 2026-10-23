@@ -74,18 +74,20 @@
                                     <div class="mb-3">
                                         @csrf
                                         <label class="form-label">Model</label>
-                                        <select class="form-select" name="model" required>
+                                        <select class="form-select" name="model" id="select-model" required>
                                             <option value="LSTM">LSTM</option>
                                             <option value="BiLSTM">BiLSTM</option>
                                             <option value="GRU">GRU</option>
                                         </select>
+                                        <div class="form-text" id="arch-hint"></div>
                                     </div>
 
                                     <div class="mb-3">
-                                        <label class="form-label">Arsitektur</label>
-                                        <select class="form-select" name="arsitektur" required>
-                                            <option value="A">A — 1 lapisan (128 unit)</option>
-                                            <option value="B">B — 2 lapisan (64, 32 unit)</option>
+                                        <label class="form-label">Horizon Prediksi</label>
+                                        <select class="form-select" name="horizon" required>
+                                            <option value="30" selected>30 hari</option>
+                                            <option value="7">7 hari</option>
+                                            <option value="1">1 hari</option>
                                         </select>
                                     </div>
 
@@ -279,7 +281,8 @@
                 <table class="table table-sm table-vcenter">
                     <tbody>
                         <tr><th>Model</th><td class="model"></td></tr>
-                        <tr><th>Arsitektur</th><td class="architecture"></td></tr>
+                        <tr><th>Horizon</th><td class="horizon"></td></tr>
+                        <tr><th>Konfigurasi</th><td class="config"></td></tr>
                         <tr><th>Strategi</th><td class="strategy"></td></tr>
                         <tr><th>Epoch aktual</th><td class="epoch"></td></tr>
                         <tr><th>Parameter model</th><td class="parameters"></td></tr>
@@ -297,8 +300,10 @@
                 result.querySelector('.scenario').textContent =
                     data.kode_skenario ?? '-';
                 result.querySelector('.model').textContent = data.model ?? '-';
-                result.querySelector('.architecture').textContent =
-                    data.arsitektur ?? '-';
+                result.querySelector('.horizon').textContent =
+                    data.horizon ? `${data.horizon} hari` : '-';
+                result.querySelector('.config').textContent =
+                    `${data.units ?? '-'} unit · dropout ${data.dropout ?? '-'} · LR ${data.learning_rate ?? '-'}`;
                 result.querySelector('.strategy').textContent =
                     data.strategi ?? '-';
                 result.querySelector('.epoch').textContent =
@@ -410,5 +415,17 @@
             });
 
         })();
+    </script>
+    <script>
+        const ARCH_INFO = {
+            LSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
+            BiLSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
+            GRU: '1 lapisan × 100 unit · dropout 0.2 · LR 0.001 · Adam',
+        };
+        const modelSel = document.getElementById('select-model');
+        const hint = document.getElementById('arch-hint');
+        const syncHint = () => hint.textContent = ARCH_INFO[modelSel.value];
+        modelSel.addEventListener('change', syncHint);
+        syncHint();
     </script>
 @endpush
