@@ -38,20 +38,19 @@ class ModelController extends Controller
     public function train(Request $request)
 {
     $validated = $request->validate([
-        'komoditas' => ['required', 'integer', Rule::in([1, 2, 3])],
-        'wilayah' => ['required', 'integer', Rule::in([37])],
-        'dari' => ['required', 'date_format:Y-m-d'],
-        'sampai' => [
-            'required',
-            'date_format:Y-m-d',
-            'after_or_equal:dari',
-        ],
-        'model' => ['required', Rule::in(['LSTM', 'BiLSTM', 'GRU'])],
-        'arsitektur' => ['required', Rule::in(['A', 'B'])],
-        'strategi' => ['required', Rule::in(['ST-1', 'ST-2', 'ST-3'])],
-        'target_mode' => ['required', Rule::in(['price', 'difference']),
-        ],
-    ]);
+    'komoditas' => ['required', 'integer', Rule::in([1, 2, 3])],
+    'wilayah' => ['required', 'integer', Rule::in([37])],
+    'dari' => ['required', 'date_format:Y-m-d'],
+    'sampai' => [
+        'required',
+        'date_format:Y-m-d',
+        'after_or_equal:dari',
+    ],
+    'model' => ['required', Rule::in(['LSTM', 'BiLSTM', 'GRU'])],
+    'strategi' => ['required', Rule::in(['ST-1', 'ST-2', 'ST-3'])],
+    'target_mode' => ['required', Rule::in(['price', 'difference'])],
+    'horizon' => ['required', 'integer', Rule::in([1, 7, 30])],
+]);
 
     try {
         $res = Http::withHeaders([
