@@ -66,19 +66,20 @@ def load_series(id_komoditas, id_wilayah, dari, sampai):
         )
 
         cuaca = pd.read_sql(
-            """
-            SELECT
-                tanggal,
-                suhu,
-                kelembapan,
-                curah_hujan,
-                jumlah_titik
-            FROM data_cuacaharian
-            WHERE tanggal BETWEEN %s AND %s
-            ORDER BY tanggal
-            """,
+        """
+        SELECT
+            tanggal,
+            suhu,
+            kelembapan,
+            curah_hujan,
+            jumlah_titik
+        FROM data_cuacaharian
+        WHERE id_komoditas = %s
+            AND tanggal BETWEEN %s AND %s
+        ORDER BY tanggal
+        """,
             conn,
-            params=(dari, sampai),
+            params=(id_komoditas, dari, sampai),
         )
 
     finally:
