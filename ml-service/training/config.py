@@ -21,7 +21,7 @@ if not DB["user"] or not DB["database"]:
 # Nilai awal; window dan learning rate dapat di-override lewat CLI
 # saat tuning (--window, --lr).
 FIXED = {
-    "window_size": 14,
+    "window_size": 28,
     "batch_size": 32,
 }
 
@@ -29,9 +29,9 @@ MODELS = ["LSTM", "BiLSTM", "GRU"]
 
 # Arsitektur "K": mengacu pada hyperparameter Khan dkk. (2024), Tabel 1.
 MODEL_CONFIG = {
-    "LSTM":   {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.0001},
-    "BiLSTM": {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.0001},
-    "GRU":    {"units": [100],      "dropout": 0.3, "learning_rate": 0.0001},
+    "LSTM":   {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.01},
+    "BiLSTM": {"units": [100, 100], "dropout": 0.3, "learning_rate": 0.01},
+    "GRU":    {"units": [100],      "dropout": 0.3, "learning_rate": 0.001},
 }
 ARCH_LABEL = "K"
 
