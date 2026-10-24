@@ -1,6 +1,7 @@
 import os
+import sys
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 
 import mysql.connector
 import pandas as pd
@@ -250,9 +251,14 @@ try:
         database=os.getenv("DB_NAME"),
     )
 
-    TANGGAL_MULAI, TANGGAL_AKHIR = tentukan_rentang(
-        mydb, ID_KOMODITAS, ID_WILAYAH, TANGGAL_AWAL_DATA
-    )
+    if len(sys.argv) == 3:
+        # Mode backfill manual: python bawangmerah.py 2023-04-15 2023-04-25
+        TANGGAL_MULAI = date.fromisoformat(sys.argv[1])
+        TANGGAL_AKHIR = date.fromisoformat(sys.argv[2])
+    else:
+        TANGGAL_MULAI, TANGGAL_AKHIR = tentukan_rentang(
+            mydb, ID_KOMODITAS, ID_WILAYAH, TANGGAL_AWAL_DATA
+        )
 
     if TANGGAL_MULAI is None or TANGGAL_AKHIR is None:
         pesan = f"{NAMA_KOMODITAS}: data sudah terbaru (up-to-date)"
