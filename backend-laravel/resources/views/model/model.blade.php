@@ -420,7 +420,8 @@
         const ARCH_INFO = {
             LSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
             BiLSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
-            GRU: '1 lapisan × 100 unit · dropout 0.2 · LR 0.001 · Adam',
+            GRU: '1 lapisan × 100 unit · dropout 0.3 · LR 0.001 · Adam',
+
         };
         const modelSel = document.getElementById('select-model');
         const hint = document.getElementById('arch-hint');
