@@ -1,2 +1,6 @@
 demo_mysql_test.py
 .env
+__pycache__/
+*.pyc
+ml-service/saved_models/
+ml-service/training/hasil/
