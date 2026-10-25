@@ -121,6 +121,7 @@ def jalankan_training(params: dict):
             "--strategi", params["strategi"],
             "--target-mode", params["target_mode"],
             "--horizon", str(params["horizon"]),
+            "--log",
         ]
 
         proses = subprocess.Popen(
@@ -300,6 +301,7 @@ def mulai_training(
         "request": params,
         "result": None,
         "error": None,
+        "stage_index": -1,
     })
 
     background.add_task(jalankan_training, params)
