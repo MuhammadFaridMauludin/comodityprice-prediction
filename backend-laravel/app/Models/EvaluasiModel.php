@@ -24,15 +24,21 @@ class EvaluasiModel extends Model
         'patience',
         'batch_size',
         'window_size',
+        'horizon',
         'learning_rate',
+        'dropout',
         'jumlah_parameter',
+        'durasi_detik',
         'tanggal_evaluasi',
         'rmse',
+        'rmse_validasi',
         'mae',
         'mape',
+        'r2',
         'tanggal_mulai',
         'tanggal_berakhir',
         'status',
+        'nama_file',
     ];
 
     protected $casts = [
@@ -42,17 +48,27 @@ class EvaluasiModel extends Model
         'patience'         => 'integer',
         'batch_size'       => 'integer',
         'window_size'      => 'integer',
+        'horizon'          => 'integer',
         'learning_rate'    => 'float',
+        'dropout'          => 'float',
         'jumlah_parameter' => 'integer',
+        'durasi_detik'     => 'float',
         'rmse'             => 'float',
+        'rmse_validasi'    => 'float',
         'mae'              => 'float',
         'mape'             => 'float',
+        'r2'               => 'float',
         'tanggal_evaluasi' => 'datetime',
         'tanggal_mulai'    => 'date',
         'tanggal_berakhir' => 'date',
     ];
 
     public function model(): BelongsTo
+    {
+        return $this->belongsTo(ModelPrediksi::class, 'id_model', 'id_model');
+    }
+
+    public function modelPrediksi(): BelongsTo
     {
         return $this->belongsTo(ModelPrediksi::class, 'id_model', 'id_model');
     }
