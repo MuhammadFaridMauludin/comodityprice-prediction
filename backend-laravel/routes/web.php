@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 Route::get('/prediksi', [PrediksiController::class, 'index'])->name('prediksi');
-Route::get('/historis', [HistorisController::class, 'index'])->name('historis');
+Route::get('/historis', [DataController::class, 'index'])->name('historis');
 Route::get('/evaluasi', [EvaluasiController::class, 'index'])->name('evaluasi');
 Route::get('/wawasan', [WawasanController::class, 'index'])->name('wawasan');
 
