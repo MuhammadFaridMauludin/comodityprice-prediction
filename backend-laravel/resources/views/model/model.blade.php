@@ -17,26 +17,36 @@
                                     'Model',
                                     ['label' => 'RMSE', 'align' => 'right'],
                                     ['label' => 'MAPE', 'align' => 'right'],
+                                    ['label' => 'R²', 'align' => 'right'],
                                     'Terakhir dilatih',
                                 ]">
-                                    @foreach ($active as $m)
+                                    @forelse ($active as $m)
                                         <tr>
                                             <td>{{ $m['commodity'] }}</td>
                                             <td><span class="badge bg-primary-lt">{{ $m['model'] }}</span></td>
                                             <td class="text-end">{{ number_format($m['rmse'], 1, ',', '.') }}</td>
                                             <td class="text-end">{{ number_format($m['mape'], 2, ',', '.') }}%</td>
-                                            <td class="text-secondary">{{ $m['trained']->translatedFormat('d M Y') }}</td>
+                                            <td class="text-end">
+                                                {{ isset($m['r2']) ? number_format($m['r2'], 3, ',', '.') : '-' }}</td>
+                                            <td class="text-secondary">
+                                                {{ $m['trained']?->translatedFormat('d M Y') ?? '-' }}</td>
                                         </tr>
-                                    @endforeach
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="text-center text-secondary py-3">
+                                                Belum ada model aktif untuk horizon {{ $horizonAktif }} hari.
+                                            </td>
+                                        </tr>
+                                    @endforelse
                                 </x-admin.table>
                             </div>
                             <div class="col-lg-5">
                                 <h4>Keterangan</h4>
                                 <p class="text-secondary">
-                                    Model aktif adalah model yang dipakai untuk menghasilkan prediksi harga 7 hari di
-                                    halaman pengguna.
-                                    Setiap komoditas memiliki model aktifnya sendiri, dipilih dari hasil training dengan
-                                    RMSE terendah.
+                                    Model aktif adalah model yang dipakai untuk menghasilkan prediksi harga
+                                    {{ $horizonAktif }} hari di halaman pengguna. Setiap komoditas memiliki model
+                                    aktifnya sendiri, dipilih dari hasil training pada data terbaru dengan RMSE
+                                    validasi terendah.
                                 </p>
                                 <p class="text-secondary mb-0">
                                     Jalankan retraining dari panel di bawah untuk memperbarui model dengan data terbaru.
@@ -155,29 +165,40 @@
                             'No',
                             'Nama Model',
                             'Komoditas',
+                            'Horizon',
                             'Tanggal Train',
                             'Dataset (periode)',
                             ['label' => 'RMSE', 'align' => 'right'],
                             ['label' => 'MAE', 'align' => 'right'],
                             ['label' => 'MAPE', 'align' => 'right'],
+                            ['label' => 'R²', 'align' => 'right'],
                             'Status',
                         ]">
-                            @foreach ($history as $row)
+                            @forelse ($history as $row)
                                 <tr>
                                     <td>{{ $history->firstItem() + $loop->index }}</td>
                                     <td class="fw-bold">{{ $row['model'] }}</td>
                                     <td>{{ $row['commodity'] }}</td>
-                                    <td>{{ $row['trained']->translatedFormat('d M Y') }}</td>
+                                    <td>{{ $row['horizon'] ? $row['horizon'] . ' hari' : '-' }}</td>
+                                    <td>{{ $row['trained']?->translatedFormat('d M Y') ?? '-' }}</td>
                                     <td class="text-secondary">{{ $row['period'] }}</td>
                                     <td class="text-end">
                                         {{ $row['rmse'] ? number_format($row['rmse'], 1, ',', '.') : '-' }}</td>
-                                    <td class="text-end">{{ $row['mae'] ? number_format($row['mae'], 1, ',', '.') : '-' }}
-                                    </td>
+                                    <td class="text-end">
+                                        {{ $row['mae'] ? number_format($row['mae'], 1, ',', '.') : '-' }}</td>
                                     <td class="text-end">
                                         {{ $row['mape'] ? number_format($row['mape'], 2, ',', '.') . '%' : '-' }}</td>
+                                    <td class="text-end">
+                                        {{ isset($row['r2']) ? number_format($row['r2'], 3, ',', '.') : '-' }}</td>
                                     <td><x-admin.badge :status="$row['status']" /></td>
                                 </tr>
-                            @endforeach
+                            @empty
+                                <tr>
+                                    <td colspan="11" class="text-center text-secondary py-3">
+                                        Belum ada riwayat training.
+                                    </td>
+                                </tr>
+                            @endforelse
                         </x-admin.table>
 
                         <x-slot name="footer">
@@ -267,6 +288,7 @@
             function showResult(data) {
                 const metrics = data.metrik || {};
                 const naive = data.metrik_naive || {};
+                const fmt3 = v => v == null ? '-' : formatNumber(v, 3);
 
                 result.innerHTML = `
             <div class="alert alert-success">
@@ -289,9 +311,11 @@
                         <tr><th>RMSE</th><td>${formatNumber(metrics.rmse)}</td></tr>
                         <tr><th>MAE</th><td>${formatNumber(metrics.mae)}</td></tr>
                         <tr><th>MAPE</th><td>${formatNumber(metrics.mape)}%</td></tr>
+                        <tr><th>R²</th><td>${fmt3(metrics.r2)}</td></tr>
                         <tr><th>RMSE naive</th><td>${formatNumber(naive.rmse)}</td></tr>
                         <tr><th>MAE naive</th><td>${formatNumber(naive.mae)}</td></tr>
                         <tr><th>MAPE naive</th><td>${formatNumber(naive.mape)}%</td></tr>
+                        <tr><th>R² naive</th><td>${fmt3(naive.r2)}</td></tr>
                         <tr><th>Durasi</th><td>${formatNumber(data.durasi_detik, 1)} detik</td></tr>
                     </tbody>
                 </table>
@@ -421,7 +445,6 @@
             LSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
             BiLSTM: '2 lapisan × 100 unit · dropout 0.3 · LR 0.01 · Adam',
             GRU: '1 lapisan × 100 unit · dropout 0.3 · LR 0.001 · Adam',
-
         };
         const modelSel = document.getElementById('select-model');
         const hint = document.getElementById('arch-hint');
