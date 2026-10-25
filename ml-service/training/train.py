@@ -1,16 +1,20 @@
 import argparse
 import json
+import sys
 import time
+from datetime import datetime
+from pathlib import Path
 
 import joblib
+import mysql.connector
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import callbacks
-from pathlib import Path
-from aggregate_weather import aggregate_weather
 
+from aggregate_weather import aggregate_weather
 from config import (
     ARCH_LABEL,
+    DB,
     FIXED,
     MODEL_CONFIG,
     MODELS,
@@ -20,6 +24,10 @@ from config import (
 )
 from data import load_series, prepare
 from models import build_model
+
+# log_helper dipakai bersama dengan script scraping
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scraping" / "price"))
+from log_helper import catat_log  # noqa: E402
 
 
 FITUR = {
@@ -40,20 +48,34 @@ FITUR = {
     ],
 }
 
+# Samakan dengan nilai status yang dikenali <x-admin.badge> dan
+# STATUS_OK di ModelController (Laravel).
+STATUS_SELESAI = "berhasil"
+STATUS_GAGAL = "gagal"
+
+
+# ============================================================
+# METRIK
+# ============================================================
 
 def metrics(y_true, y_pred):
-    """Menghitung RMSE, MAE, dan MAPE."""
+    """Menghitung RMSE, MAE, MAPE, dan R²."""
     y_true = np.asarray(y_true).reshape(-1)
     y_pred = np.asarray(y_pred).reshape(-1)
 
     err = y_true - y_pred
 
+    ss_res = float(np.sum(err ** 2))
+    ss_tot = float(np.sum((y_true - np.mean(y_true)) ** 2))
+
+    # None (bukan NaN) agar JSON tetap valid untuk PHP dan JavaScript.
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else None
+
     return {
         "rmse": float(np.sqrt(np.mean(err ** 2))),
         "mae": float(np.mean(np.abs(err))),
-        "mape": float(
-            np.mean(np.abs(err / y_true)) * 100
-        ),
+        "mape": float(np.mean(np.abs(err / y_true)) * 100),
+        "r2": r2,
     }
 
 
@@ -88,7 +110,79 @@ def to_price(model, X, last_price, d, target_mode):
     return pred
 
 
+# ============================================================
+# PENCATATAN KE DATABASE
+# ============================================================
+
+def catat_ke_system_log(status, durasi, pesan):
+    """Menulis satu baris ke system-log. Kegagalan di sini tidak
+    boleh menggagalkan training."""
+    try:
+        conn = mysql.connector.connect(**DB)
+        try:
+            catat_log(
+                conn,
+                "Training Model",
+                "ML Service",
+                status,
+                durasi,
+                pesan[:500],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"[PERINGATAN] Gagal menulis system-log: {exc}", flush=True)
+
+
+def simpan_evaluasi(nilai):
+    """INSERT satu baris ke evaluasi_model. Tidak pernah menimpa.
+
+    `nilai` berisi nama kolom -> nilai, ditambah key "model"
+    (LSTM/BiLSTM/GRU) yang dicari id-nya di tabel model_prediksi.
+    """
+    try:
+        conn = mysql.connector.connect(**DB)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id_model FROM model WHERE nama_model = %s",
+                (nilai["model"],),
+            )
+            baris = cur.fetchone()
+
+            if baris is None:
+                raise ValueError(
+                    f"Model {nilai['model']} tidak ada di tabel model_prediksi."
+                )
+
+            kolom = {k: v for k, v in nilai.items() if k != "model"}
+            kolom["id_model"] = baris[0]
+
+            cur.execute(
+                f"INSERT INTO evaluasi_model ({', '.join(kolom)}) "
+                f"VALUES ({', '.join(['%s'] * len(kolom))})",
+                tuple(kolom.values()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"[PERINGATAN] Gagal menyimpan evaluasi_model: {exc}", flush=True)
+        catat_ke_system_log(
+            "peringatan",
+            0,
+            f"Training selesai, tetapi gagal menyimpan evaluasi_model: {exc}",
+        )
+
+
+# ============================================================
+# PROSES TRAINING
+# ============================================================
+
 def run(args):
+    t_run = time.time()
+
     # Mengatur seed untuk Python, NumPy, dan TensorFlow.
     tf.keras.utils.set_random_seed(args.seed)
 
@@ -131,9 +225,7 @@ def run(args):
     fitur_pilihan = FITUR[args.fitur]
 
     if fitur_pilihan is not None:
-        missing = (
-            set(fitur_pilihan) - set(feature_cols)
-        )
+        missing = set(fitur_pilihan) - set(feature_cols)
 
         if missing:
             raise ValueError(
@@ -248,9 +340,7 @@ def run(args):
         f"_seed{args.seed}"
     )
 
-    model.save(
-        SAVE_DIR / f"{stem}.keras"
-    )
+    model.save(SAVE_DIR / f"{stem}.keras")
 
     joblib.dump(
         d["x_scaler"],
@@ -275,13 +365,9 @@ def run(args):
         "strategi": args.strategi,
         "epoch_maks": st["epochs"],
         "epoch_aktual": len(hist.history["loss"]),
-        "early_stopping": (
-            st["patience"] is not None
-        ),
+        "early_stopping": st["patience"] is not None,
         "patience": st["patience"],
-        "jumlah_parameter": int(
-            model.count_params()
-        ),
+        "jumlah_parameter": int(model.count_params()),
         "durasi_detik": round(durasi, 1),
         "seed": args.seed,
         "window_size": window,
@@ -296,33 +382,13 @@ def run(args):
             "validasi": d["n_val"],
             "uji": d["n_test"],
         },
-        "val_loss_terbaik": float(
-            min(hist.history["val_loss"])
-        ),
-        "metrik_validasi": metrics(
-            y_true_va,
-            y_pred_va,
-        ),
-        "metrik_naive_validasi": metrics(
-            y_true_va,
-            y_naive_va,
-        ),
-        "metrik": metrics(
-            y_true,
-            y_pred,
-        ),
-        "metrik_naive": metrics(
-            y_true,
-            y_naive,
-        ),
-        "metrik_per_langkah": metrics_per_step(
-            y_true,
-            y_pred,
-        ),
-        "metrik_naive_per_langkah": metrics_per_step(
-            y_true,
-            y_naive,
-        ),
+        "val_loss_terbaik": float(min(hist.history["val_loss"])),
+        "metrik_validasi": metrics(y_true_va, y_pred_va),
+        "metrik_naive_validasi": metrics(y_true_va, y_naive_va),
+        "metrik": metrics(y_true, y_pred),
+        "metrik_naive": metrics(y_true, y_naive),
+        "metrik_per_langkah": metrics_per_step(y_true, y_pred),
+        "metrik_naive_per_langkah": metrics_per_step(y_true, y_naive),
         "target_mode": args.target_mode,
     }
 
@@ -333,13 +399,62 @@ def run(args):
             ensure_ascii=False,
         )
     )
+
     Path("hasil").mkdir(exist_ok=True)
     Path("hasil", f"{stem}_s{args.seed}.json").write_text(
-        json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(out, indent=2, ensure_ascii=False),
+        encoding="utf-8",
     )
+
+    # 12. Simpan ke database dan system-log (hanya dari ML service).
+    if args.log:
+        m = out["metrik"]
+
+        simpan_evaluasi({
+            "model": args.model,
+            "id_komoditas": args.komoditas,
+            "id_wilayah": args.wilayah,
+            "kode_skenario": kode,
+            "epoch": st["epochs"],
+            "batch_size": FIXED["batch_size"],
+            "window_size": window,
+            "horizon": horizon,
+            "learning_rate": lr,
+            "dropout": dropout,
+            "tanggal_evaluasi": datetime.now(),
+            "rmse": m["rmse"],
+            "rmse_validasi": out["metrik_validasi"]["rmse"],
+            "mae": m["mae"],
+            "mape": m["mape"],
+            "r2": m["r2"],
+            "tanggal_mulai": df.index.min().date(),
+            "tanggal_berakhir": df.index.max().date(),
+            "units": out["units"],
+            "early_stopping": int(out["early_stopping"]),
+            "patience": st["patience"],
+            "epoch_aktual": out["epoch_aktual"],
+            "jumlah_parameter": out["jumlah_parameter"],
+            "durasi_detik": out["durasi_detik"],
+            "nama_file": stem,
+            "status": STATUS_SELESAI,
+        })
+
+        r2_txt = "-" if m["r2"] is None else f"{m['r2']:.3f}"
+
+        pesan = (
+            f"{args.model} komoditas {args.komoditas}, horizon {horizon}, "
+            f"{args.strategi}: RMSE {m['rmse']:.2f}, "
+            f"MAPE {m['mape']:.2f}%, R2 {r2_txt}"
+        )
+
+        catat_ke_system_log("sukses", time.time() - t_run, pesan)
 
     return out
 
+
+# ============================================================
+# CLI
+# ============================================================
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -430,6 +545,7 @@ if __name__ == "__main__":
             "Default mengikuti MODEL_CONFIG per model."
         ),
     )
+
     p.add_argument(
         "--dropout",
         type=float,
@@ -444,4 +560,36 @@ if __name__ == "__main__":
         help="Kelompok fitur yang digunakan untuk training.",
     )
 
-    run(p.parse_args())
+    p.add_argument(
+        "--log",
+        action="store_true",
+        help=(
+            "Simpan hasil ke evaluasi_model dan catat ke system-log "
+            "(dipakai oleh ML service)."
+        ),
+    )
+
+    args = p.parse_args()
+    mulai = time.time()
+
+    try:
+        run(args)
+    except Exception as exc:
+        if args.log:
+            simpan_evaluasi({
+                "model": args.model,
+                "id_komoditas": args.komoditas,
+                "id_wilayah": args.wilayah,
+                "kode_skenario": scenario_code(args.model, args.strategi),
+                "horizon": args.horizon,
+                "tanggal_evaluasi": datetime.now(),
+                "status": STATUS_GAGAL,
+            })
+            catat_ke_system_log(
+                "gagal",
+                time.time() - mulai,
+                f"{args.model} komoditas {args.komoditas}, "
+                f"horizon {args.horizon}: "
+                f"{type(exc).__name__}: {exc}",
+            )
+        raise
