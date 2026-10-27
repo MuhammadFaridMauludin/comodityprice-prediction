@@ -408,5 +408,6 @@ def prepare(
         "split_val_end": i_va,
         "target_mode": target_mode,
         "horizon": horizon,
+        "test_idx": test_idx,
         "window": window,
     }
