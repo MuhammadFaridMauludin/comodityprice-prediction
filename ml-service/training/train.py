@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import joblib
@@ -138,8 +138,8 @@ def catat_ke_system_log(status, durasi, pesan):
 def simpan_evaluasi(nilai):
     """INSERT satu baris ke evaluasi_model. Tidak pernah menimpa.
 
-    `nilai` berisi nama kolom -> nilai, ditambah key "model"
-    (LSTM/BiLSTM/GRU) yang dicari id-nya di tabel model_prediksi.
+    Mengembalikan {"id_evaluasi", "id_model"} agar prediksi bisa
+    dikaitkan ke run ini, atau None jika gagal.
     """
     try:
         conn = mysql.connector.connect(**DB)
@@ -165,6 +165,7 @@ def simpan_evaluasi(nilai):
                 tuple(kolom.values()),
             )
             conn.commit()
+            return {"id_evaluasi": cur.lastrowid, "id_model": baris[0]}
         finally:
             conn.close()
     except Exception as exc:
@@ -174,8 +175,89 @@ def simpan_evaluasi(nilai):
             0,
             f"Training selesai, tetapi gagal menyimpan evaluasi_model: {exc}",
         )
+        return None
+
+def susun_baris_prediksi(df, d, y_pred, model, window, horizon,
+                         target_mode, feature_cols):
+    """Menyusun baris hasil_prediksi: backtest dan forecast.
+
+    Backtest : satu titik awal tiap 7 hari pada data uji, termasuk titik
+               awal paling akhir. y_pred berskala harga asli, bentuk
+               (jumlah_jendela, horizon), urutannya sama dengan d["test_idx"].
+    Forecast : `horizon` hari setelah hari terakhir pada data.
+    """
+    tanggal = df.index
+    baris = []
+
+    # 1. Backtest. i = indeks hari target pertama; hari ke-0 = i - 1.
+    test_idx = d["test_idx"]
+
+    for j in sorted(range(len(test_idx) - 1, -1, -7)):
+        i = int(test_idx[j])
+        awal = tanggal[i - 1].date()
+
+        for k in range(horizon):
+            baris.append((
+                "backtest",
+                awal,
+                tanggal[i + k].date(),
+                float(y_pred[j, k]),
+            ))
+
+    # 2. Forecast dari window terakhir.
+    x_semua = df[feature_cols].to_numpy(dtype=np.float64)
+    x_akhir = d["x_scaler"].transform(x_semua[-window:])[None, :, :]
+    harga_akhir = np.array([float(df["harga"].iloc[-1])])
+
+    f = to_price(model, x_akhir, harga_akhir, d, target_mode)[0]
+    awal = tanggal[-1].date()
+
+    for k in range(horizon):
+        baris.append((
+            "forecast",
+            awal,
+            (tanggal[-1] + timedelta(days=k + 1)).date(),
+            float(f[k]),
+        ))
+
+    return baris
 
 
+def simpan_prediksi(info, komoditas, wilayah, baris):
+    """INSERT baris prediksi ke hasil_prediksi."""
+    try:
+        conn = mysql.connector.connect(**DB)
+        try:
+            cur = conn.cursor()
+            sekarang = datetime.now()
+
+            data = [
+                (
+                    info["id_model"], komoditas, wilayah, info["id_evaluasi"],
+                    jenis, awal, tgl, harga, sekarang,
+                )
+                for jenis, awal, tgl, harga in baris
+            ]
+
+            cur.executemany(
+                "INSERT INTO hasil_prediksi "
+                "(id_model, id_komoditas, id_wilayah, id_evaluasi, jenis, "
+                "tanggal_awal, tanggal_prediksi, harga_prediksi, tanggal_proses) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                data,
+            )
+            conn.commit()
+            return len(data)
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"[PERINGATAN] Gagal menyimpan hasil_prediksi: {exc}", flush=True)
+        catat_ke_system_log(
+            "peringatan",
+            0,
+            f"Training selesai, tetapi gagal menyimpan hasil_prediksi: {exc}",
+        )
+        return 0
 # ============================================================
 # PROSES TRAINING
 # ============================================================
@@ -405,12 +487,12 @@ def run(args):
         json.dumps(out, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-
+    info = None
     # 12. Simpan ke database dan system-log (hanya dari ML service).
     if args.log:
         m = out["metrik"]
 
-        simpan_evaluasi({
+        info = simpan_evaluasi({
             "model": args.model,
             "id_komoditas": args.komoditas,
             "id_wilayah": args.wilayah,
@@ -438,6 +520,19 @@ def run(args):
             "nama_file": stem,
             "status": STATUS_SELESAI,
         })
+
+    if info:
+        try:
+            baris = susun_baris_prediksi(
+                df, d, y_pred, model, window, horizon,
+                args.target_mode, feature_cols,
+            )
+            simpan_prediksi(info, args.komoditas, args.wilayah, baris)
+        except Exception as exc:
+            print(f"[PERINGATAN] Gagal menyusun prediksi: {exc}", flush=True)
+            catat_ke_system_log(
+                "gagal", 0, f"Evaluasi tersimpan, prediksi gagal: {exc}"
+            )
 
         r2_txt = "-" if m["r2"] is None else f"{m['r2']:.3f}"
 
