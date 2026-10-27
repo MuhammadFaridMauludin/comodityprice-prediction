@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/model', [ModelController::class, 'model'])->name('model');
     Route::post('/model/train', [ModelController::class, 'train'])->name('model.train');
     Route::get('/model/train/status', [ModelController::class, 'trainingStatus'])->name('model.train.status');
+    Route::get('/prediksi', [PrediksiController::class, 'prediksi'])->name('prediksi');
 
     Route::get('/pengguna', [UserController::class, 'index'])->name('pengguna');
     Route::post('/pengguna', [UserController::class, 'store'])->name('pengguna.store');
