@@ -11,8 +11,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class DataController extends Controller
 {
@@ -67,12 +65,6 @@ class DataController extends Controller
             $res = Http::withHeaders(['X-API-Key' => config('services.ml_service.key')])
                 ->timeout(10)
                 ->post(config('services.ml_service.url') . '/scrape/harga');
-        if ($res->failed()) {
-            dd([
-                'status_code' => $res->status(),
-                'response_body' => $res->body(),
-            ]);
-        }
         } catch (ConnectionException $e) {
             return back()->with('error', 'ML service tidak bisa dihubungi. Pastikan sudah dijalankan.');
         }
@@ -152,67 +144,79 @@ class DataController extends Controller
 
     return back()->with('success', 'Scraping cuaca dimulai.');
 }
-private const PER_PAGE = 15;
+private const PER_PAGE = 10;
 
-    public function index(Request $request)
-    {
-        $commodities = $this->commodities();
-        $slug = $request->query('komoditas', 'gabah');
-        if (! array_key_exists($slug, $commodities)) {
-            $slug = array_key_first($commodities);
-        }
+public function index(Request $request)
+{
+    $komoditas = Komoditas::orderBy('id_komoditas')->pluck('nama_komoditas', 'id_komoditas');
+    abort_if($komoditas->isEmpty(), 404);
 
-        $series = $this->series($slug, $commodities[$slug]['base']);
-        $min    = $series->first()['date'];
-        $max    = $series->last()['date'];
-
-        // Rentang tanggal: default 30 hari terakhir. Input tidak valid diganti nilai aman.
-        $sampai = $this->parseDate($request->query('sampai'), $max, $min, $max);
-        $dari   = $this->parseDate($request->query('dari'), $max->copy()->subDays(29), $min, $max);
-        if ($dari->gt($sampai)) {
-            [$dari, $sampai] = [$sampai, $dari];
-        }
-
-        $inRange = $series->filter(fn ($r) => $r['date']->between($dari, $sampai))->values();
-        $total   = $inRange->count();
-        $average = $total ? (int) round($inRange->avg('price')) : 0;
-
-        // Pagination: hanya PER_PAGE baris yang dikirim ke tampilan.
-        $lastPage = max(1, (int) ceil($total / self::PER_PAGE));
-        $page     = min(max(1, LengthAwarePaginator::resolveCurrentPage()), $lastPage);
-
-        $items = $inRange->forPage($page, self::PER_PAGE)->map(fn ($r) => [
-            'date'  => $r['date']->translatedFormat('d M Y'),
-            'price' => $r['price'],
-            'diff'  => $r['diff'],
-        ])->values();
-
-        $rows = (new LengthAwarePaginator($items, $total, self::PER_PAGE, $page, ['path' => $request->url()]))
-            ->onEachSide(1)
-            ->withQueryString();
-
-        return view('data.index', [
-            'tabs'    => collect($commodities)->map(fn ($c) => $c['name'])->all(),
-            'active'  => $slug,
-            'rows'    => $rows,
-            'total'   => $total,
-            'average' => $average,
-            'dari'    => $dari->toDateString(),
-            'sampai'  => $sampai->toDateString(),
-            'min'     => $min->toDateString(),
-            'max'     => $max->toDateString(),
-        ]);
-
-        /*
-         * VERSI DATABASE (yang benar-benar meringankan loading):
-         *
-         *   $q = Harga::where('commodity_id', $id)->whereBetween('tanggal', [$dari, $sampai]);
-         *   $average = (clone $q)->avg('harga');
-         *   $rows    = $q->orderBy('tanggal')->paginate(15)->withQueryString();
-         *
-         * Dengan paginate(), database hanya mengambil 15 baris per halaman.
-         */
+    // Komoditas aktif: ?komoditas=ID, kalau tidak valid pakai yang pertama
+    $active = (int) $request->query('komoditas');
+    if (! $komoditas->has($active)) {
+        $active = $komoditas->keys()->first();
     }
+
+    // Batas tanggal data untuk komoditas ini (kalau kosong, pakai hari ini)
+    $minRaw = Harga::where('id_komoditas', $active)->min('tanggal');
+    $maxRaw = Harga::where('id_komoditas', $active)->max('tanggal');
+    $today  = now()->startOfDay();
+    $min    = $minRaw ? Carbon::parse($minRaw)->startOfDay() : $today;
+    $max    = $maxRaw ? Carbon::parse($maxRaw)->startOfDay() : $today;
+
+    // Default 30 hari terakhir. Input tidak valid diganti nilai aman.
+    $sampai = $this->parseDate($request->query('sampai'), $max, $min, $max);
+    $dari   = $this->parseDate($request->query('dari'), $max->copy()->subDays(29), $min, $max);
+    if ($dari->gt($sampai)) {
+        [$dari, $sampai] = [$sampai, $dari];
+    }
+
+    $query = Harga::with('wilayah')
+        ->where('id_komoditas', $active)
+        ->whereBetween('tanggal', [$dari->toDateString(), $sampai->toDateString()]);
+
+    $total   = (clone $query)->count();
+    $average = (int) round((clone $query)->avg('harga'));
+
+    // Database hanya mengambil PER_PAGE baris per halaman.
+    // Harga sebelumnya lewat subquery supaya Δ baris pertama juga benar.
+    $rows = $query
+        ->select('data_harga.*')
+        ->selectSub(function ($s) {
+            $s->from('data_harga as p')
+                ->select('p.harga')
+                ->whereColumn('p.id_komoditas', 'data_harga.id_komoditas')
+                ->whereColumn('p.id_wilayah', 'data_harga.id_wilayah')
+                ->whereColumn('p.tanggal', '<', 'data_harga.tanggal')
+                ->orderByDesc('p.tanggal')
+                ->limit(1);
+        }, 'harga_sebelumnya')
+        ->orderBy('tanggal', 'desc')
+        ->paginate(self::PER_PAGE)
+        ->onEachSide(1)
+        ->withQueryString();
+
+    $rows->through(fn ($r) => [
+        'date'    => Carbon::parse($r->tanggal)->translatedFormat('d M Y'),
+        'wilayah' => $r->wilayah->nama_wilayah ?? '-',
+        'price'   => (int) $r->harga,
+        'diff'    => $r->harga_sebelumnya
+            ? ($r->harga - $r->harga_sebelumnya) / $r->harga_sebelumnya * 100
+            : 0,
+    ]);
+
+    return view('data.index', [
+        'tabs'    => $komoditas->all(),   // [id_komoditas => nama]
+        'active'  => $active,
+        'rows'    => $rows,
+        'total'   => $total,
+        'average' => $average,
+        'dari'    => $dari->toDateString(),
+        'sampai'  => $sampai->toDateString(),
+        'min'     => $min->toDateString(),
+        'max'     => $max->toDateString(),
+    ]);
+}
 
     private function parseDate(?string $value, Carbon $fallback, Carbon $min, Carbon $max): Carbon
     {
@@ -223,40 +227,5 @@ private const PER_PAGE = 15;
         }
 
         return $date->lt($min) ? $min->copy() : ($date->gt($max) ? $max->copy() : $date);
-    }
-
-    /** Data contoh: satu harga per hari sejak 1 Jan 2025 sampai hari ini. Ganti dengan database. */
-    private function series(string $slug, int $base): Collection
-    {
-        $start = Carbon::create(2025, 1, 1)->startOfDay();
-        $days  = (int) $start->diffInDays(now()->startOfDay());
-        $out   = collect();
-        $prev  = null;
-
-        for ($i = 0; $i <= $days; $i++) {
-            $noise = (abs(crc32($slug.$i)) % 21) - 10;                 // -10 .. 10
-            $price = $base + $base * 0.03 * sin($i / 9) + $noise * ($base / 1000);
-            $price = (int) (round($price / 50) * 50);
-
-            $out->push([
-                'date'  => $start->copy()->addDays($i),
-                'price' => $price,
-                'diff'  => $prev ? ($price - $prev) / $prev * 100 : 0,
-            ]);
-            $prev = $price;
-        }
-
-        return $out;
-    }
-
-    private function commodities(): array
-    {
-        return [
-            'gabah'         => ['name' => 'Gabah',         'base' => 6100],
-            'beras-premium' => ['name' => 'Beras Premium', 'base' => 12700],
-            'minyak-goreng' => ['name' => 'Minyak Goreng', 'base' => 18800],
-            'gula-pasir'    => ['name' => 'Gula Pasir',    'base' => 17000],
-            'cabai-merah'   => ['name' => 'Cabai Merah',   'base' => 52000],
-        ];
     }
 }
