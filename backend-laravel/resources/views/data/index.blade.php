@@ -12,10 +12,18 @@
     <div class="hist">
         @include('data.partials.filter')
 
-        <x-data-table :columns="['Tanggal', ['label' => 'Harga', 'align' => 'right'], ['label' => 'Δ', 'align' => 'right']]">
+        <x-data-table :columns="[
+            'No',
+            'Tanggal',
+            // 'Wilayah',
+            ['label' => 'Harga', 'align' => 'right'],
+            ['label' => '%', 'align' => 'right'],
+        ]">
             @forelse ($rows as $row)
                 <tr>
+                    <td>{{ $rows->firstItem() + $loop->index }}</td>
                     <td>{{ $row['date'] }}</td>
+                    {{-- <td>{{ $row['wilayah'] }}</td> --}}
                     <td class="num price">Rp {{ number_format($row['price'], 0, ',', '.') }}</td>
                     <td class="num">
                         <x-change-badge :value="$row['diff']" :decimals="2" :arrow="false" :signed="true" />
@@ -23,7 +31,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="3">Tidak ada data pada rentang tanggal ini.</td>
+                    <td colspan="5">Tidak ada data pada rentang tanggal ini.</td>
                 </tr>
             @endforelse
 
