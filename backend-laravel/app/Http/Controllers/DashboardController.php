@@ -9,44 +9,103 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\Harga;
+use App\Models\Komoditas;
+
 
 class DashboardController extends Controller
 {
-    public function index()
-    {
-        // Data dummy. Ganti dengan query ke database / hasil model prediksi.
-        $prediction = [
-            'commodity' => 'Gabah',
-            'price'     => 6200,
-            'change'    => 2.4,
-            'series'    => [6050, 6080, 6110, 6130, 6160, 6185, 6200], // 7 hari ke depan
-        ];
+    private const HORIZON = 30;
+    public function index(Request $request)
+{
+    
+    $komoditas = Komoditas::orderBy('id_komoditas')->get();
+    abort_if($komoditas->isEmpty(), 404);
 
-        $labels = collect(range(0, 29))->map(fn ($i) => now()->startOfYear()->addDays($i)->translatedFormat('d M'))->all();
-        $trend  = collect(range(0, 29))->map(fn ($i) => 6000 + (int) (sin($i / 4) * 80) + $i * 5)->all();
+    // Komoditas utama: ?komoditas=ID, default yang pertama
+    $utama = $komoditas->firstWhere('id_komoditas', (int) $request->query('komoditas'))
+        ?? $komoditas->first();
 
-        $commodities = [
-            ['name' => 'Beras Premium', 'price' => 12800, 'change' => 1.2],
-            ['name' => 'Minyak Goreng', 'price' => 18500, 'change' => -0.8],
-            ['name' => 'Gula Pasir',    'price' => 17200, 'change' => 0.6],
-            ['name' => 'Cabai Merah',   'price' => 52000, 'change' => -3.1],
-        ];
+    // Tren: 30 data harga terakhir milik komoditas utama
+    $tren = Harga::where('id_komoditas', $utama->id_komoditas)
+        ->orderByDesc('tanggal')
+        ->limit(30)
+        ->get(['tanggal', 'harga'])
+        ->reverse()
+        ->values();
 
-        $links = [
-            ['href' => route('evaluasi'), 'icon' => 'gauge', 'title' => 'Model terbaik: GRU',
-             'subtitle' => 'RMSE '.number_format(195.6, 1, ',', '.').' · MAPE '.number_format(2.33, 2, ',', '.').'%'],
-            // ['href' => route('notif'), 'icon' => 'bell', 'title' => 'Notifikasi Harga',
-            //  'subtitle' => '2 peringatan ambang harga aktif'],
-        ];
+    $labels   = $tren->map(fn ($r) => Carbon::parse($r->tanggal)->translatedFormat('d M'))->all();
+    $values   = $tren->map(fn ($r) => (int) $r->harga)->all();
+    $terakhir = (int) ($tren->last()->harga ?? 0);
+    $tglAkhir = $tren->last()->tanggal ?? null;
 
-        return view('dashboard.dashboard', [
-            'prediction'  => $prediction,
-            'labels'      => $labels,
-            'datasets'    => [['label' => 'Harga', 'values' => $trend, 'color' => '#1a5cff']],
-            'commodities' => $commodities,
-            'links'       => $links,
-        ]);
+    // Prediksi: hasil run terbaru (id_evaluasi terbesar), 7 hari setelah data aktual terakhir
+    $series = [];
+    if ($tglAkhir) {
+        $idEval = DB::table('hasil_prediksi')
+            ->where('id_komoditas', $utama->id_komoditas)
+            ->max('id_evaluasi');
+
+        if ($idEval) {
+            $series = DB::table('hasil_prediksi')
+                ->where('id_komoditas', $utama->id_komoditas)
+                ->where('id_evaluasi', $idEval)
+                ->whereDate('tanggal_prediksi', '>', $tglAkhir)
+                ->orderBy('tanggal_prediksi')
+                ->limit(self::HORIZON)
+                ->pluck('harga_prediksi')
+                ->map(fn ($v) => (int) round($v))
+                ->all();
+        }
     }
+
+    $hargaPrediksi = $series ? end($series) : $terakhir;
+
+    $prediction = [
+        'commodity' => $utama->nama_komoditas,
+        'price'     => $hargaPrediksi,
+        'change'    => $terakhir ? round(($hargaPrediksi - $terakhir) / $terakhir * 100, 1) : 0,
+        'series'    => $series,
+    ];
+
+    // Daftar komoditas: harga terbaru + perubahan dari data sebelumnya
+    $commodities = $komoditas->map(function ($k) {
+        $dua  = Harga::where('id_komoditas', $k->id_komoditas)
+            ->orderByDesc('tanggal')->limit(2)->pluck('harga');
+        $now  = (int) ($dua[0] ?? 0);
+        $prev = (int) ($dua[1] ?? 0);
+
+        return [
+            'name'   => $k->nama_komoditas,
+            'price'  => $now,
+            'change' => $prev ? round(($now - $prev) / $prev * 100, 1) : 0,
+        ];
+    })->all();
+
+    // Model terbaik (MAPE terendah) untuk komoditas utama
+    $terbaik = DB::table('evaluasi_model as e')
+        ->join('model as m', 'm.id_model', '=', 'e.id_model')
+        ->where('e.id_komoditas', $utama->id_komoditas)
+        ->whereNotNull('e.mape')
+        ->orderBy('e.mape')
+        ->first(['m.nama_model', 'e.rmse', 'e.mape']);
+
+    $links = $terbaik ? [[
+        'href'     => route('evaluasi'),
+        'icon'     => 'gauge',
+        'title'    => 'Model terbaik: '.$terbaik->nama_model,
+        'subtitle' => 'RMSE '.number_format($terbaik->rmse, 1, ',', '.')
+                    .' · MAPE '.number_format($terbaik->mape, 2, ',', '.').'%',
+    ]] : [];
+
+    return view('dashboard.dashboard', [
+        'prediction'  => $prediction,
+        'labels'      => $labels,
+        'datasets'    => [['label' => 'Harga', 'values' => $values, 'color' => '#1a5cff']],
+        'commodities' => $commodities,
+        'links'       => $links,
+    ]);
+}
 
     public function dashboardadmin(Request $request)
     {
