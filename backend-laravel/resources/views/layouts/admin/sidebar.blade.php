@@ -223,7 +223,12 @@
                         <span class="nav-link-title">Model</span>
                     </a>
                 </li>
-
+                <li class="nav-item {{ request()->routeIs('prediksi') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ route('prediksi') }}">
+                        <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-search"></i></span>
+                        <span class="nav-link-title">Prediksi</span>
+                    </a>
+                </li>
                 <li class="nav-item {{ request()->routeIs('pengguna') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ route('pengguna') }}">
                         <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-users"></i></span>

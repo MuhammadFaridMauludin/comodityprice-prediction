@@ -13,12 +13,18 @@
         @endforeach
     </nav>
 
-    <div class="sidebar__user">
+    {{-- <div class="sidebar__user">
         <x-avatar :name="auth()->user()->name ?? 'Muhammad Farid'" :src="asset('images/avatar.jpg')" />
         <div class="sidebar__user-text">
             <strong>{{ auth()->user()->name ?? 'Muhammad Farid' }}</strong>
             <small>Analis Komoditas</small>
-        </div>
-        {{-- <a href="{{ route('notif') }}" class="icon-btn" aria-label="Notifikasi"><x-icon name="bell" :size="18" /></a> --}}
+        </div> --}}
+    <div class="sidebar__user">
+        <a href="{{ route('login') }}" class="sidebar__login-btn">
+            <i class="bi bi-box-arrow-in-right"></i>
+            <span>Login Admin</span>
+        </a>
+    </div>
+    {{-- <a href="{{ route('notif') }}" class="icon-btn" aria-label="Notifikasi"><x-icon name="bell" :size="18" /></a> --}}
     </div>
 </aside>

@@ -11,7 +11,7 @@
         $rp = fn($v) => $v === null ? '-' : 'Rp ' . number_format($v, 0, ',', '.');
         $angka = fn($v, $d = 0) => $v === null ? '-' : number_format($v, $d, ',', '.');
         $persen = fn($v) => $v === null ? '-' : number_format($v, 1, ',', '.') . '%';
-        $kolomAkurasi = ['Model', 'RMSE', 'MAE', 'MAPE', 'R²', 'RMSE naive', 'Dibanding naive'];
+        $kolomAkurasi = ['Model', 'RMSE', 'MAE', 'MAPE', 'R²']; //'RMSE naive', 'Dibanding naive'
     @endphp
 
     <x-admin.page-header pretitle="Overview" title="Prediksi" />
@@ -72,13 +72,13 @@
                             </div>
                         @endif
 
-                        <div class="col-md-2">
+                        {{-- <div class="col-md-2">
                             <label class="form-check py-2 mb-0">
                                 <input class="form-check-input" type="checkbox" name="naive" value="1"
                                     {{ $tampilNaive ? 'checked' : '' }}>
                                 <span class="form-check-label">Tampilkan naive</span>
                             </label>
-                        </div>
+                        </div> --}}
                     </div>
 
                     <div class="mt-2">
@@ -152,7 +152,7 @@
                                     <td>{{ $angka($a['mae']) }}</td>
                                     <td>{{ $persen($a['mape']) }}</td>
                                     <td>{{ $angka($a['r2'], 3) }}</td>
-                                    <td>{{ $angka($a['rmse_naive']) }}</td>
+                                    {{-- <td>{{ $angka($a['rmse_naive']) }}</td>
                                     <td>
                                         @if ($a['selisih'] === null)
                                             -
@@ -163,7 +163,7 @@
                                             <span class="badge bg-warning-lt">{{ number_format(abs($a['selisih']), 0) }}%
                                                 lebih buruk</span>
                                         @endif
-                                    </td>
+                                    </td> --}}
                                 </tr>
                             @endforeach
                         </x-admin.table>
